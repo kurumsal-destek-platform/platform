@@ -1,0 +1,36 @@
+# Ortam ve gizli bilgiler
+.env
+*.env.local
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Node / Vite
+node_modules/
+dist/
+coverage/
+
+# Modeller ve büyük dosyalar
+ml/models/
+*.gguf
+*.safetensors
+*.bin
+
+# IDE / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

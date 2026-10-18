@@ -1,0 +1,46 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        if: hashFiles('backend/**/*.sln') != ''
+        with:
+          dotnet-version: 8.0.x
+      - name: Backend build + test
+        if: hashFiles('backend/**/*.sln') != ''
+        working-directory: backend
+        run: |
+          dotnet restore
+          dotnet build --no-restore -c Release
+          dotnet test --no-build -c Release
+
+      - uses: actions/setup-python@v5
+        if: hashFiles('rag-service/requirements.txt') != ''
+        with:
+          python-version: '3.11'
+      - name: RAG lint + test
+        if: hashFiles('rag-service/requirements.txt') != ''
+        working-directory: rag-service
+        run: |
+          pip install -r requirements.txt pytest ruff
+          ruff check .
+          pytest -q || [ $? -eq 5 ]
+
+      - uses: actions/setup-node@v4
+        if: hashFiles('frontend/package.json') != ''
+        with:
+          node-version: 20
+      - name: Frontend build
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
