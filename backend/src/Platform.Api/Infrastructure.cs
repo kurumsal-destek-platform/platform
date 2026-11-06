@@ -51,11 +51,20 @@ public static class KbSearch
 {
     private static readonly CultureInfo Tr = new("tr-TR");
 
+    // Anlam taşımayan kelimeler aramada sayılmaz.
+    private static readonly HashSet<string> StopWords = new()
+    {
+        "nasıl", "neden", "niçin", "nerede", "nereden", "hangi", "kim", "ne", "mi", "mı", "mu", "mü",
+        "bugün", "yarın", "dün", "için", "ile", "gibi", "kadar", "daha", "çok", "bir", "bu", "şu", "o",
+        "var", "yok", "olur", "oldu", "olan", "ben", "benim", "bana", "sen", "siz", "biz", "lütfen",
+        "acaba", "yapmalıyım", "yapabilirim", "yapılır", "yapmam", "gerekiyor", "istiyorum", "nedir",
+    }; 
+
     public static List<(Article Article, int Score)> Rank(IEnumerable<Article> articles, string query, int take = 3)
     {
         var words = query.ToLower(Tr)
             .Split(new[] { ' ', ',', '.', '?', '!', ':', ';' }, StringSplitOptions.RemoveEmptyEntries)
-            .Where(w => w.Length >= 3)
+            .Where(w => w.Length >= 3 && !StopWords.Contains(w))
             .ToArray();
         if (words.Length == 0) return new();
 
