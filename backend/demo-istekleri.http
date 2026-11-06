@@ -1,0 +1,7 @@
+### Tüm demo kullanıcılarının şifresi: Demo123!
+### Anka: yonetici@anka.com (proje yöneticisi), ayse@anka.com, mehmet@anka.com, ali@anka.com
+### Mavi: yonetici@mavi.com, deniz@mavi.com
+POST http://localhost:5235/api/auth/login
+Content-Type: application/json
+
+{ "email": "mehmet@anka.com", "password": "Demo123!" }
