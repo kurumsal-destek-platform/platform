@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Alert, Box, Button, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack, TextField, Typography,
+  Alert, Box, Button, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack, Tab, Tabs, TextField, Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import LockIcon from "@mui/icons-material/LockOutlined";
 import {
-  api, errorMessage, PRIORITIES, STATUSES, type CommentT, type ProjectDetail, type WorkItemDetail,
+  api, describeActivity, errorMessage, PRIORITIES, STATUSES, timeAgo,
+  type Activity, type CommentT, type ProjectDetail, type WorkItemDetail,
 } from "../api";
 import { Person, PriorityText, StatusChip, TypeIcon } from "./common";
+import MentionInput, { MentionText } from "./MentionInput";
 
 // Görev detayı. Atanan kişi düzenler, diğer üyeler salt okunur görür ve yorum yazar,
 // proje yöneticisi atama yapar. Asıl kural backend'de; burada sadece arayüz uyarlanır.
@@ -20,6 +22,7 @@ export default function WorkItemDialog({ itemKey, project, onClose }: {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
+  const [tab, setTab] = useState(0);
 
   const detail = useQuery({
     queryKey: ["item", itemKey],
@@ -32,16 +35,25 @@ export default function WorkItemDialog({ itemKey, project, onClose }: {
     enabled: !!itemKey,
   });
 
+  const activity = useQuery({
+    queryKey: ["activity", itemKey],
+    queryFn: async () => (await api.get<Activity[]>(`/api/items/${itemKey}/activity`)).data,
+    enabled: !!itemKey && tab === 1,
+  });
+
   const item = detail.data?.item;
   const perms = detail.data?.permissions;
 
   useEffect(() => {
     if (item) { setTitle(item.title); setDescription(item.description); }
     setError("");
+    setTab(0);
   }, [item?.id]); // eslint-disable-line
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["item", itemKey] });
+    qc.invalidateQueries({ queryKey: ["activity", itemKey] });
+    qc.invalidateQueries({ queryKey: ["sprints", project.key] });
     qc.invalidateQueries({ queryKey: ["items", project.key] });
     qc.invalidateQueries({ queryKey: ["myItems"] });
   };
@@ -61,7 +73,11 @@ export default function WorkItemDialog({ itemKey, project, onClose }: {
   });
   const addComment = useMutation({
     mutationFn: () => api.post(`/api/items/${itemKey}/comments`, { body: comment }),
-    onSuccess: () => { setComment(""); qc.invalidateQueries({ queryKey: ["comments", itemKey] }); },
+    onSuccess: () => {
+      setComment("");
+      qc.invalidateQueries({ queryKey: ["comments", itemKey] });
+      qc.invalidateQueries({ queryKey: ["activity", itemKey] });
+    },
     onError: onErr,
   });
 
@@ -117,21 +133,43 @@ export default function WorkItemDialog({ itemKey, project, onClose }: {
               )}
 
               <Divider />
-              <Typography variant="subtitle2">Yorumlar</Typography>
-              {comments.data?.map((c) => (
-                <Box key={c.id} sx={{ bgcolor: "action.hover", p: 1.5, borderRadius: 1 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    {c.authorName} · {new Date(c.createdAt).toLocaleString("tr-TR")}
-                  </Typography>
-                  <Typography variant="body2">{c.body}</Typography>
-                </Box>
-              ))}
-              <Stack direction="row" spacing={1}>
-                <TextField size="small" placeholder="Yorum ekle…" value={comment}
-                  onChange={(e) => setComment(e.target.value)} fullWidth />
-                <Button variant="outlined" disabled={!comment.trim() || addComment.isPending}
-                  onClick={() => addComment.mutate()}>Gönder</Button>
-              </Stack>
+              <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 36 }}>
+                <Tab label="Yorumlar" sx={{ minHeight: 36 }} />
+                <Tab label="Geçmiş" sx={{ minHeight: 36 }} />
+              </Tabs>
+              {tab === 0 && (
+                <>
+                  {comments.data?.length === 0 && <Typography variant="body2" color="text.secondary">Henüz yorum yok.</Typography>}
+                  {comments.data?.map((c) => (
+                    <Box key={c.id} sx={{ bgcolor: "action.hover", p: 1.5, borderRadius: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {c.authorName} · {timeAgo(c.createdAt)}
+                      </Typography>
+                      <MentionText text={c.body} />
+                    </Box>
+                  ))}
+                  <Stack direction="row" spacing={1}>
+                    <MentionInput value={comment} onChange={setComment} users={project.members}
+                      placeholder="Yorum ekle… (birinden bahsetmek için @ yazın)"
+                      onSubmit={() => { if (!addComment.isPending) addComment.mutate(); }} />
+                    <Button variant="outlined" disabled={!comment.trim() || addComment.isPending}
+                      onClick={() => addComment.mutate()}>Gönder</Button>
+                  </Stack>
+                </>
+              )}
+              {tab === 1 && (
+                <Stack spacing={1}>
+                  {activity.data?.length === 0 && <Typography variant="body2" color="text.secondary">Kayıt yok.</Typography>}
+                  {activity.data?.map((a) => (
+                    <Box key={a.id}>
+                      <Typography variant="body2"><b>{a.userName}</b> {describeActivity(a)}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(a.at).toLocaleString("tr-TR")} · {timeAgo(a.at)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
             </Stack>
 
             {/* Sağ: alanlar */}
@@ -161,6 +199,21 @@ export default function WorkItemDialog({ itemKey, project, onClose }: {
               <Box>
                 <Typography variant="caption" color="text.secondary">Bitiş tarihi</Typography>
                 <Typography variant="body2">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("tr-TR") : "—"}</Typography>
+              </Box>
+              {perms?.canEdit ? (
+                <TextField select size="small" label="Story point" value={item.storyPoints ?? ""}
+                  onChange={(e) => save.mutate({ storyPoints: Number(e.target.value) })}>
+                  {[1, 2, 3, 5, 8, 13].map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                </TextField>
+              ) : (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Story point</Typography>
+                  <Typography variant="body2">{item.storyPoints ?? "—"}</Typography>
+                </Box>
+              )}
+              <Box>
+                <Typography variant="caption" color="text.secondary">Sprint</Typography>
+                <Typography variant="body2">{detail.data?.sprint?.name ?? "Backlog"}</Typography>
               </Box>
               <Box>
                 <Typography variant="caption" color="text.secondary">Tür</Typography>

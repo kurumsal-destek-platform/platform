@@ -25,6 +25,9 @@ public class AppDbContext : DbContext
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<Article> Articles => Set<Article>();
     public DbSet<KbFeedback> KbFeedbacks => Set<KbFeedback>();
+    public DbSet<Sprint> Sprints => Set<Sprint>();
+    public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -42,6 +45,11 @@ public class AppDbContext : DbContext
         b.Entity<Ticket>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<Article>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<KbFeedback>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<Sprint>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<ActivityLog>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<Notification>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<ActivityLog>().HasIndex(x => x.WorkItemId);
+        b.Entity<Notification>().HasIndex(x => new { x.UserId, x.IsRead });
     }
 
     // Yeni kayıtlara TenantId'yi otomatik yazar; geliştirici unutsa bile.

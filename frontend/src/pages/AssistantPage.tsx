@@ -16,9 +16,9 @@ export default function AssistantPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        end.current?.scrollIntoView({ behavior: "smooth" });
-    }, [msgs]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: "smooth" });
+  }, [msgs]);
 
   const send = async () => {
     const question = input.trim();
@@ -40,7 +40,7 @@ export default function AssistantPage() {
   };
 
   return (
-    <Box sx={{ maxWidth: 820, display: "flex", flexDirection: "column", height: "calc(100vh - 48px)" }}>
+    <Box sx={{ maxWidth: 820, display: "flex", flexDirection: "column", height: "calc(100vh - 120px)" }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Asistan</Typography>
       <Card variant="outlined" sx={{ flex: 1, overflowY: "auto", p: 2 }}>
         <Stack spacing={2}>

@@ -58,7 +58,7 @@ public static class KbSearch
         "bugün", "yarın", "dün", "için", "ile", "gibi", "kadar", "daha", "çok", "bir", "bu", "şu", "o",
         "var", "yok", "olur", "oldu", "olan", "ben", "benim", "bana", "sen", "siz", "biz", "lütfen",
         "acaba", "yapmalıyım", "yapabilirim", "yapılır", "yapmam", "gerekiyor", "istiyorum", "nedir",
-    }; 
+    };
 
     public static List<(Article Article, int Score)> Rank(IEnumerable<Article> articles, string query, int take = 3)
     {
