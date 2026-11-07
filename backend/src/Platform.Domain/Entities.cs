@@ -55,8 +55,35 @@ public class User : ITenantEntity
     public Guid TenantId { get; set; }
     public string Email { get; set; } = "";
     public string FullName { get; set; } = "";
-    public string PasswordHash { get; set; } = "";
+    public string PasswordHash { get; set; } = "";   // davet edilip henüz şifre koymamışsa boş
     public string Role { get; set; } = Roles.Employee;
+    public bool IsActive { get; set; } = true;
+    public bool EmailConfirmed { get; set; }
+    public int FailedLoginCount { get; set; }
+    public DateTime? LockoutEnd { get; set; }
+    // Şifre değişince yenilenir; eski JWT'ler geçersiz olur
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LastLoginAt { get; set; }
+}
+
+public static class TokenPurposes
+{
+    public const string ResetPassword = "reset";
+    public const string Invite = "invite";
+    public const string VerifyEmail = "verify";
+}
+
+// Şifre sıfırlama / davet / e-posta doğrulama bağlantıları. Token'ın kendisi değil, SHA-256 özeti saklanır.
+public class AuthToken
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string Purpose { get; set; } = TokenPurposes.ResetPassword;
+    public string TokenHash { get; set; } = "";
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? UsedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class Project : ITenantEntity
@@ -92,7 +119,9 @@ public class WorkItem : ITenantEntity
     public string Priority { get; set; } = "Medium";
     public Guid? AssigneeId { get; set; }
     public Guid ReporterId { get; set; }
+    public DateTime? StartDate { get; set; }   // zaman çizelgesi için
     public DateTime? DueDate { get; set; }
+    public string[] Labels { get; set; } = Array.Empty<string>();
     public int? StoryPoints { get; set; }
     public Guid? SprintId { get; set; }      // null = backlog
     public int Rank { get; set; }            // backlog sırası
@@ -124,6 +153,7 @@ public class Ticket : ITenantEntity
     public string? ResolutionNote { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ResolvedAt { get; set; }
+    public Guid? WorkItemId { get; set; }   // göreve çevrildiyse
 }
 
 public class Article : ITenantEntity
@@ -134,6 +164,7 @@ public class Article : ITenantEntity
     public string Body { get; set; } = "";
     public string Category { get; set; } = "Diğer";
     public bool Published { get; set; } = true;
+    public Guid? SourceTicketId { get; set; }  // çözülen ticket'tan üretildiyse
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -191,5 +222,51 @@ public class Notification : ITenantEntity
     public string Body { get; set; } = "";
     public string? Link { get; set; }            // frontend adresi, ör. /projects/ANK?item=ANK-3
     public bool IsRead { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public static class LinkTypes
+{
+    public const string Blocks = "blocks";       // kaynak, hedefi engeller
+    public const string Relates = "relates";     // ilişkili
+    public const string Duplicates = "duplicates"; // kaynak, hedefin kopyası
+    public static readonly string[] All = { Blocks, Relates, Duplicates };
+}
+
+public class WorkItemLink : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid SourceId { get; set; }
+    public Guid TargetId { get; set; }
+    public string Type { get; set; } = LinkTypes.Relates;
+    public Guid CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// "Bana atanan açık buglar" gibi kaydedilmiş liste/pano filtreleri
+public class SavedFilter : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid ProjectId { get; set; }
+    public Guid OwnerId { get; set; }
+    public string Name { get; set; } = "";
+    public string Query { get; set; } = "{}";   // filtre alanları (JSON)
+    public bool Shared { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class Attachment : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid? WorkItemId { get; set; }
+    public Guid? TicketId { get; set; }
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "application/octet-stream";
+    public long Size { get; set; }
+    public string StoredName { get; set; } = "";  // diskteki adı
+    public Guid UploadedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

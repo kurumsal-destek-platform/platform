@@ -9,6 +9,7 @@ import BookIcon from "@mui/icons-material/MenuBookOutlined";
 import ChatIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import LogoutIcon from "@mui/icons-material/Logout";
+import PeopleIcon from "@mui/icons-material/PeopleOutlined";
 import DashboardIcon from "@mui/icons-material/InsightsOutlined";
 import TopBar from "./TopBar";
 import { useAuth } from "../auth";
@@ -29,7 +30,8 @@ export default function Layout() {
   const nav = useNavigate();
   const isManager = user?.role === "Manager" || user?.role === "Admin";
   const items = isManager
-    ? [...NAV.slice(0, 1), { to: "/dashboard", label: "Gösterge paneli", icon: <DashboardIcon /> }, ...NAV.slice(1)]
+    ? [...NAV.slice(0, 1), { to: "/dashboard", label: "Gösterge paneli", icon: <DashboardIcon /> }, ...NAV.slice(1),
+       { to: "/users", label: "Kullanıcılar", icon: <PeopleIcon /> }]
     : NAV;
 
   return (
@@ -54,10 +56,13 @@ export default function Layout() {
         </List>
         <Divider sx={{ my: 1 }} />
         <Stack direction="row" spacing={1} sx={{ alignItems: "center", px: 1 }}>
+          <Box component={NavLink} to="/profile" title="Profil"
+            sx={{ display: "flex", gap: 1, alignItems: "center", flex: 1, minWidth: 0, color: "inherit", textDecoration: "none" }}>
           <Avatar sx={{ width: 32, height: 32, bgcolor: "#f79233", fontSize: 13 }}>{initials(user?.fullName)}</Avatar>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="body2" noWrap>{user?.fullName}</Typography>
             <Typography variant="caption" color="text.secondary" noWrap>{user?.role}</Typography>
+          </Box>
           </Box>
           <Tooltip title="Çıkış yap">
             <Button size="small" color="inherit" onClick={() => { logout(); nav("/login"); }}><LogoutIcon fontSize="small" /></Button>

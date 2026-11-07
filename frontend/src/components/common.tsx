@@ -4,7 +4,7 @@ import CheckBoxIcon from "@mui/icons-material/CheckBox";
 import BugIcon from "@mui/icons-material/BugReport";
 import BoltIcon from "@mui/icons-material/Bolt";
 import SubIcon from "@mui/icons-material/SubdirectoryArrowRight";
-import { PRIORITIES, statusLabel } from "../api";
+import { isOverdue, PRIORITIES, statusLabel } from "../api";
 import { initials } from "./Layout";
 
 export function TypeIcon({ type }: { type: string }) {
@@ -38,5 +38,30 @@ export function Person({ name }: { name?: string | null }) {
       </Avatar>
       <Typography variant="body2" color={name ? "text.primary" : "text.secondary"}>{name ?? "Atanmadı"}</Typography>
     </Stack>
+  );
+}
+
+export function LabelChips({ labels, max = 3 }: { labels?: string[]; max?: number }) {
+  if (!labels?.length) return null;
+  return (
+    <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
+      {labels.slice(0, max).map((l) => (
+        <Chip key={l} label={l} size="small" sx={{ height: 20, fontSize: 11, bgcolor: "rgba(87,157,255,0.15)", color: "#85b8ff" }} />
+      ))}
+      {labels.length > max && <Typography variant="caption" color="text.secondary">+{labels.length - max}</Typography>}
+    </Stack>
+  );
+}
+
+// Bitiş tarihi; geçmişse ve iş bitmediyse kırmızı
+export function DueDate({ item, short }: { item: { dueDate?: string | null; status: string }; short?: boolean }) {
+  if (!item.dueDate) return <Typography variant="body2" color="text.secondary">—</Typography>;
+  const late = isOverdue(item);
+  const text = new Date(item.dueDate).toLocaleDateString("tr-TR", short ? { day: "numeric", month: "short" } : undefined);
+  return (
+    <Typography variant={short ? "caption" : "body2"}
+      sx={{ color: late ? "#f87168" : "text.secondary", fontWeight: late ? 600 : 400 }}>
+      {late ? "⚠ " : ""}{text}{late && !short ? " (gecikti)" : ""}
+    </Typography>
   );
 }

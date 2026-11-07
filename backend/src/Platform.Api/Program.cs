@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -15,6 +16,7 @@ builder.Services.AddScoped<ITenantProvider, HttpTenantProvider>();
 builder.Services.AddDbContext<AppDbContext>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddSingleton(new JwtSettings(jwtKey));
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddHttpClient();
 
 builder.Services
@@ -30,9 +32,35 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             NameClaimType = "sub",
             RoleClaimType = "role",
+            ClockSkew = TimeSpan.FromMinutes(1),
+        };
+        // Şifre değişti, hesap kapatıldı ya da "tüm cihazlardan çıkış" yapıldıysa eski token'ları reddet
+        o.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async ctx =>
+            {
+                var sub = ctx.Principal?.FindFirst("sub")?.Value;
+                var stamp = ctx.Principal?.FindFirst("stamp")?.Value;
+                if (!Guid.TryParse(sub, out var userId)) { ctx.Fail("Geçersiz token"); return; }
+                var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                var user = await db.Users.IgnoreQueryFilters().AsNoTracking()
+                    .Where(u => u.Id == userId).Select(u => new { u.IsActive, u.SecurityStamp }).FirstOrDefaultAsync();
+                if (user is null || !user.IsActive || user.SecurityStamp != stamp) ctx.Fail("Oturum geçersiz");
+            },
         };
     });
 builder.Services.AddAuthorization();
+
+// Giriş, şifre sıfırlama gibi uçlara IP başına dakikada 10 istek (kaba kuvvet denemelerine karşı)
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.AddPolicy("auth", http => RateLimitPartition.GetFixedWindowLimiter(
+        http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    o.OnRejected = async (ctx, ct) =>
+        await ctx.HttpContext.Response.WriteAsJsonAsync(new { message = "Çok fazla istek. Lütfen bir dakika sonra tekrar deneyin." }, ct);
+});
 
 builder.Services.AddCors(o => o.AddPolicy("fe", p => p
     .WithOrigins("http://localhost:5173", "http://localhost:3000")
@@ -63,17 +91,19 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Demo için: tablolar yoksa oluştur, boşsa demo verisini yükle.
+// Bekleyen migration'ları uygula, eski kullanıcı kayıtlarını yükselt, boşsa demo verisini yükle
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();   
+    db.Database.Migrate();
+    Seeder.UpgradeLegacyUsers(db);
     Seeder.Seed(db);
 }
 
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseCors("fe");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

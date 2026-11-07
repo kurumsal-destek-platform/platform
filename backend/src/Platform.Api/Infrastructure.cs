@@ -27,7 +27,7 @@ public record JwtSettings(string Key);
 
 public static class TokenService
 {
-    public static string Create(User u, JwtSettings s)
+    public static string Create(User u, JwtSettings s, bool remember = false)
     {
         var claims = new[]
         {
@@ -36,11 +36,12 @@ public static class TokenService
             new Claim("role", u.Role),
             new Claim("name", u.FullName),
             new Claim("email", u.Email),
+            new Claim("stamp", u.SecurityStamp),
         };
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(s.Key));
         var token = new JwtSecurityToken(
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(12),
+            expires: remember ? DateTime.UtcNow.AddDays(7) : DateTime.UtcNow.AddHours(12),
             signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
         return new JwtSecurityTokenHandler().WriteToken(token);
     }

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Platform.Domain;
 using Platform.Infrastructure;
@@ -9,6 +10,21 @@ public static class Seeder
 {
     public const string DemoPassword = "Demo123!";
 
+    // Kimlik doğrulama alanları eklenmeden önce oluşturulan kullanıcılar: aktif ve onaylı yap.
+    // Migration yeni kolonları boş/false ekler; SecurityStamp boş olanlar bu eski kayıtlardır.
+    public static void UpgradeLegacyUsers(AppDbContext db)
+    {
+        var legacy = db.Users.IgnoreQueryFilters().Where(u => u.SecurityStamp == "").ToList();
+        foreach (var u in legacy)
+        {
+            u.IsActive = true;
+            u.EmailConfirmed = true;
+            u.SecurityStamp = Guid.NewGuid().ToString("N");
+            u.CreatedAt = DateTime.UtcNow;
+        }
+        if (legacy.Count > 0) db.SaveChanges();
+    }
+
     public static void Seed(AppDbContext db)
     {
         if (db.Tenants.Any()) return;
@@ -16,7 +32,7 @@ public static class Seeder
 
         User NewUser(Guid tenant, string email, string name, string role)
         {
-            var u = new User { TenantId = tenant, Email = email, FullName = name, Role = role };
+            var u = new User { TenantId = tenant, Email = email, FullName = name, Role = role, EmailConfirmed = true };
             u.PasswordHash = hasher.HashPassword(u, DemoPassword);
             return u;
         }
@@ -70,6 +86,15 @@ public static class Seeder
         vpn.NextItemNumber = 8;
         items.AddRange(extra);
         db.Sprints.AddRange(sprint1, sprint2);
+
+        // Etiketler, bağlantı ve paylaşılan filtre
+        items[1].Labels = new[] { "kullanıcı", "istemci" };
+        items[2].Labels = new[] { "altyapı", "güvenlik" };
+        items[4].Labels = new[] { "windows" };
+        items[4].DueDate = DateTime.UtcNow.AddDays(-2); // geciken iş örneği
+        extra[0].Labels = new[] { "altyapı" };
+        db.WorkItemLinks.Add(new WorkItemLink { TenantId = anka.Id, SourceId = items[2].Id, TargetId = extra[0].Id, Type = LinkTypes.Blocks, CreatedBy = ankaMgr.Id });
+        db.SavedFilters.Add(new SavedFilter { TenantId = anka.Id, ProjectId = vpn.Id, OwnerId = ankaMgr.Id, Name = "Açık buglar", Query = "{\"type\":\"Bug\"}", Shared = true });
 
         // Geçmiş ve bildirimler (demo için dolu görünsün)
         db.ActivityLogs.AddRange(
