@@ -24,20 +24,21 @@ public class KbController : ApiControllerBase
     }
 
     [HttpGet("kb/articles")]
-    public async Task<IActionResult> Articles([FromQuery] string? q, [FromQuery] string? category)
+    public async Task<IActionResult> Articles([FromQuery] string? q, [FromQuery] string? category, [FromQuery] bool drafts = false)
     {
-        var all = await Db.Articles.Where(a => a.Published).ToListAsync();
+        // Yöneticiler taslakları da görebilir
+        var all = await Db.Articles.Where(a => a.Published || (drafts && IsManagerOrAdmin)).ToListAsync();
         if (!string.IsNullOrEmpty(category)) all = all.Where(a => a.Category == category).ToList();
         var result = string.IsNullOrWhiteSpace(q) ? all.OrderBy(a => a.Title).ToList()
             : KbSearch.Rank(all, q, 50).Select(x => x.Article).ToList();
-        return Ok(result.Select(a => new { a.Id, a.Title, a.Category, snippet = Snip(a.Body, 160) }));
+        return Ok(result.Select(a => new { a.Id, a.Title, a.Category, a.Published, fromTicket = a.SourceTicketId != null, snippet = Snip(a.Body, 160) }));
     }
 
     [HttpGet("kb/articles/{id:guid}")]
     public async Task<IActionResult> Article(Guid id)
     {
         var a = await Db.Articles.FirstOrDefaultAsync(x => x.Id == id);
-        return a is null ? NotFound() : Ok(a);
+        return a is null || (!a.Published && !IsManagerOrAdmin) ? NotFound() : Ok(a);
     }
 
     [HttpPost("kb/articles")]
@@ -46,6 +47,28 @@ public class KbController : ApiControllerBase
         if (!IsManagerOrAdmin) return Forbidden("Makale eklemek için yönetici olmalısınız.");
         var a = new Article { Title = req.Title, Body = req.Body, Category = req.Category ?? "Diğer" };
         Db.Articles.Add(a);
+        await Db.SaveChangesAsync();
+        return Ok(a);
+    }
+
+    [HttpPut("kb/articles/{id:guid}")]
+    public async Task<IActionResult> UpdateArticle(Guid id, CreateArticleRequest req)
+    {
+        if (!IsManagerOrAdmin) return Forbidden("Makale düzenlemek için yönetici olmalısınız.");
+        var a = await Db.Articles.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return NotFound();
+        a.Title = req.Title; a.Body = req.Body; a.Category = req.Category ?? a.Category;
+        await Db.SaveChangesAsync();
+        return Ok(a);
+    }
+
+    [HttpPost("kb/articles/{id:guid}/publish")]
+    public async Task<IActionResult> Publish(Guid id, [FromQuery] bool published = true)
+    {
+        if (!IsManagerOrAdmin) return Forbidden("Yayınlamak için yönetici olmalısınız.");
+        var a = await Db.Articles.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return NotFound();
+        a.Published = published;
         await Db.SaveChangesAsync();
         return Ok(a);
     }

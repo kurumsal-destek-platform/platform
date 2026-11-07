@@ -28,6 +28,10 @@ public class AppDbContext : DbContext
     public DbSet<Sprint> Sprints => Set<Sprint>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<WorkItemLink> WorkItemLinks => Set<WorkItemLink>();
+    public DbSet<SavedFilter> SavedFilters => Set<SavedFilter>();
+    public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<AuthToken> AuthTokens => Set<AuthToken>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -48,6 +52,12 @@ public class AppDbContext : DbContext
         b.Entity<Sprint>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<ActivityLog>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<Notification>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<WorkItemLink>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<SavedFilter>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<Attachment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<WorkItemLink>().HasIndex(x => x.SourceId);
+        b.Entity<AuthToken>().HasIndex(x => x.TokenHash).IsUnique();
+        b.Entity<WorkItemLink>().HasIndex(x => x.TargetId);
         b.Entity<ActivityLog>().HasIndex(x => x.WorkItemId);
         b.Entity<Notification>().HasIndex(x => new { x.UserId, x.IsRead });
     }

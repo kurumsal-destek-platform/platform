@@ -6,10 +6,15 @@ export const api = axios.create({
 });
 
 const TOKEN_KEY = "kdp_token";
+// "Beni hatırla" seçilirse tarayıcı kapansa da kalır (localStorage), seçilmezse sekme kapanınca silinir (sessionStorage)
+const safe = <T,>(fn: () => T, fallback: T): T => { try { return fn(); } catch { return fallback; } };
 export const tokenStore = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+  get: () => safe(() => localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY), null),
+  set: (t: string, remember = true) => safe(() => {
+    (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, t);
+    (remember ? sessionStorage : localStorage).removeItem(TOKEN_KEY);
+  }, undefined),
+  clear: () => safe(() => { localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); }, undefined),
 };
 
 // Her isteğe JWT'yi ekle.
@@ -23,7 +28,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401 && !err.config?.url?.includes("/auth/login")) {
+    const url: string = err.config?.url ?? "";
+    const publicAuth = ["/auth/login", "/auth/register", "/auth/forgot-password", "/auth/set-password",
+      "/auth/check-token", "/auth/verify-email", "/auth/resend-verification", "/auth/change-password"];
+    if (err.response?.status === 401 && !publicAuth.some((p) => url.includes(p))) {
       tokenStore.clear();
       window.location.href = "/login";
     }
@@ -32,15 +40,32 @@ api.interceptors.response.use(
 );
 
 export function errorMessage(err: unknown): string {
-  const e = err as { response?: { data?: { message?: string } }; message?: string };
-  return e.response?.data?.message ?? e.message ?? "Bir hata oluştu";
+  const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+  if (e.response?.data?.message) return e.response.data.message;
+  if (e.response?.status === 429) return "Çok fazla istek. Lütfen bir dakika sonra tekrar deneyin.";
+  if (!e.response) return "Sunucuya ulaşılamıyor. Backend çalışıyor mu?";
+  return e.message ?? "Bir hata oluştu";
 }
+export function errorCode(err: unknown): string | undefined {
+  return (err as { response?: { data?: { code?: string } } }).response?.data?.code;
+}
+
+// Şifre kuralları (backend'deki PasswordPolicy ile aynı)
+export const PASSWORD_RULES: { label: string; test: (p: string) => boolean }[] = [
+  { label: "En az 8 karakter", test: (p) => p.length >= 8 },
+  { label: "Bir büyük harf", test: (p) => /\p{Lu}/u.test(p) },
+  { label: "Bir küçük harf", test: (p) => /\p{Ll}/u.test(p) },
+  { label: "Bir rakam", test: (p) => /\d/.test(p) },
+];
 
 // ---- Tipler (backend DTO'ları ile aynı) ----
 export interface Me {
   id: string; email: string; fullName: string; role: string; tenantId: string; tenantName?: string;
 }
-export interface UserLite { id: string; fullName: string; email: string; role: string }
+export interface UserLite {
+  id: string; fullName: string; email: string; role: string;
+  isActive?: boolean; invited?: boolean; locked?: boolean; lastLoginAt?: string | null; createdAt?: string;
+}
 export interface Project { id: string; key: string; name: string; description: string; myRole: string }
 export interface ProjectDetail extends Project {
   members: { userId: string; fullName: string; role: string }[];
@@ -48,11 +73,19 @@ export interface ProjectDetail extends Project {
 export interface WorkItem {
   id: string; key: string; type: string; title: string; description: string;
   status: string; priority: string; dueDate?: string | null; createdAt: string;
-  parentId?: string | null; parentKey?: string | null;
+  parentId?: string | null; parentKey?: string | null; startDate?: string | null;
   assigneeId?: string | null; assigneeName?: string | null;
   reporterId: string; reporterName?: string | null;
-  storyPoints?: number | null; sprintId?: string | null; rank?: number;
+  storyPoints?: number | null; sprintId?: string | null; rank?: number; labels?: string[];
 }
+export interface LinkT {
+  id: string; type: string; outgoing: boolean; label: string;
+  other: { key: string; title: string; status: string; type: string };
+}
+export interface AttachmentT {
+  id: string; fileName: string; contentType: string; size: number; createdAt: string; isImage: boolean; uploadedBy?: string;
+}
+export interface SavedFilterT { id: string; name: string; query: string; shared: boolean; mine: boolean; ownerName?: string }
 export interface Sprint {
   id: string; name: string; goal: string; status: "planned" | "active" | "closed";
   startDate?: string | null; endDate?: string | null; itemCount?: number; points?: number; donePoints?: number;
@@ -93,9 +126,10 @@ export interface CommentT { id: string; body: string; createdAt: string; authorI
 export interface Ticket {
   id: string; title: string; description: string; category: string; priority: string; status: string;
   createdAt: string; reporterId: string; reporterName?: string; assigneeId?: string | null; assigneeName?: string | null;
+  workItemId?: string | null; workItemKey?: string | null; resolutionNote?: string | null;
 }
-export interface ArticleLite { id: string; title: string; category: string; snippet: string }
-export interface Article { id: string; title: string; body: string; category: string }
+export interface ArticleLite { id: string; title: string; category: string; snippet: string; published?: boolean; fromTicket?: boolean }
+export interface Article { id: string; title: string; body: string; category: string; published?: boolean }
 export interface AskResponse {
   answered: boolean; answer?: string; message?: string; reason?: string;
   sources?: { source_id: string; title: string }[];
@@ -138,4 +172,16 @@ export function timeAgo(iso: string): string {
   if (s < 3600) return `${Math.floor(s / 60)} dk önce`;
   if (s < 86400) return `${Math.floor(s / 3600)} sa önce`;
   return `${Math.floor(s / 86400)} gün önce`;
+}
+
+export const isOverdue = (w: { dueDate?: string | null; status: string }) =>
+  !!w.dueDate && w.status !== "done" && new Date(w.dueDate).getTime() < Date.now();
+
+export const formatSize = (b: number) =>
+  b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+
+// Ekler yetki gerektirdiği için <img src> ile değil, token'lı istekle blob olarak alınır
+export async function fetchAttachmentUrl(id: string): Promise<string> {
+  const r = await api.get(`/api/attachments/${id}`, { responseType: "blob" });
+  return URL.createObjectURL(r.data as Blob);
 }

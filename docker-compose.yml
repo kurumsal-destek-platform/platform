@@ -1,5 +1,6 @@
 # Tek komutla tüm sistem:  docker compose up -d --build
 # Adresler: uygulama http://localhost:5173 · API/Swagger http://localhost:5235/swagger · RAG http://localhost:8000/docs
+#           Test e-postaları (Mailpit) http://localhost:8025
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -25,13 +26,34 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Default: Host=db;Port=5432;Database=platform;Username=platform;Password=platform
       Rag__Url: http://rag:8000
+      Uploads__Path: /app/uploads
+      # E-postalar gerçek kutulara değil Mailpit'e gider (http://localhost:8025)
+      Smtp__Host: mailpit
+      Smtp__Port: "1025"
+      Smtp__Ssl: "false"
+      Smtp__From: destek@platform.local
+      App__FrontendUrl: http://localhost:5173
+      Jwt__Key: ${JWT_KEY:-gelistirme-icin-en-az-32-karakterlik-gizli-anahtar-123}
     ports:
       - "5235:8080"
+    volumes:
+      - uploads:/app/uploads   # ekler konteyner yeniden kurulunca kaybolmasın
+
+  # Sahte e-posta sunucusu: uygulamanın gönderdiği tüm mailleri web arayüzünde gösterir
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: platform-mail
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # web arayüzü
+      - "1025:1025"   # SMTP (F5 ile çalıştırırken localhost:1025 kullanılır)
 
   rag:
     build: ./rag-service
@@ -63,3 +85,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

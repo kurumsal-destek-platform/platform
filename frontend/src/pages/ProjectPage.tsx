@@ -2,18 +2,21 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Alert, Box, Button, Card, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Snackbar, Stack, Tab, Table,
+  Alert, Box, Button, Card, Chip, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Snackbar, Stack, Tab, Table,
   TableBody, TableCell, TableHead, TableRow, Tabs, TextField, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import LockIcon from "@mui/icons-material/LockOutlined";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import {
-  api, errorMessage, PRIORITIES, STATUSES, TYPES, type ProjectDetail, type Sprint, type WorkItem,
+  api, errorMessage, isOverdue, PRIORITIES, STATUSES, TYPES, type ProjectDetail, type Sprint, type WorkItem,
 } from "../api";
+import TimelineView from "../components/TimelineView";
 import BacklogView from "../components/BacklogView";
 import { useAuth } from "../auth";
-import { Person, PriorityText, StatusChip, TypeIcon } from "../components/common";
+import { DueDate, LabelChips, Person, PriorityText, StatusChip, TypeIcon } from "../components/common";
+import SavedFilters, { type FilterState } from "../components/SavedFilters";
+import { LabelsField } from "../components/ItemSections";
 import WorkItemDialog from "../components/WorkItemDialog";
 
 export default function ProjectPage() {
@@ -21,7 +24,7 @@ export default function ProjectPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const TAB_NAMES = ["backlog", "board", "list", "members"];
+  const TAB_NAMES = ["backlog", "board", "list", "timeline", "members"];
   const [tab, setTab] = useState(Math.max(0, TAB_NAMES.indexOf(params.get("tab") ?? "board")));
   const [open, setOpen] = useState<string | null>(params.get("item"));
 
@@ -36,6 +39,18 @@ export default function ProjectPage() {
   const [toast, setToast] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [labelFilter, setLabelFilter] = useState("");
+  const [text, setText] = useState("");
+  const [onlyOverdue, setOnlyOverdue] = useState(false);
+  const filterState: FilterState = { assignee: assigneeFilter, type: typeFilter, label: labelFilter, text, overdue: onlyOverdue };
+  const applyFilter = (f: FilterState) => {
+    setAssigneeFilter(f.assignee ?? ""); setTypeFilter(f.type ?? ""); setLabelFilter(f.label ?? "");
+    setText(f.text ?? ""); setOnlyOverdue(!!f.overdue);
+  };
+  const labelsQ = useQuery({
+    queryKey: ["labels", key],
+    queryFn: async () => (await api.get<string[]>(`/api/projects/${key}/labels`)).data,
+  });
 
   const project = useQuery({
     queryKey: ["project", key],
@@ -65,7 +80,10 @@ export default function ProjectPage() {
 
   const filtered = (items.data ?? []).filter((w) =>
     (!assigneeFilter || (assigneeFilter === "none" ? !w.assigneeId : w.assigneeId === assigneeFilter)) &&
-    (!typeFilter || w.type === typeFilter));
+    (!typeFilter || w.type === typeFilter) &&
+    (!labelFilter || (w.labels ?? []).includes(labelFilter)) &&
+    (!onlyOverdue || isOverdue(w)) &&
+    (!text || `${w.key} ${w.title}`.toLocaleLowerCase("tr-TR").includes(text.toLocaleLowerCase("tr-TR"))));
   // Pano, aktif sprint varsa sadece onun işlerini gösterir (Jira'daki gibi)
   const boardItems = active ? filtered.filter((w) => w.sprintId === active.id) : filtered.filter((w) => w.type !== "Epic");
   const daysLeft = active?.endDate ? Math.ceil((new Date(active.endDate).getTime() - Date.now()) / 86400000) : null;
@@ -88,8 +106,10 @@ export default function ProjectPage() {
       </Stack>
       <Tabs value={tab} onChange={(_, v) => { setTab(v); setParams({ tab: TAB_NAMES[v] }, { replace: true }); }}
         sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}>
-        <Tab label="Backlog" /><Tab label="Pano" /><Tab label="Liste" /><Tab label="Üyeler" />
+        <Tab label="Backlog" /><Tab label="Pano" /><Tab label="Liste" /><Tab label="Zaman çizelgesi" /><Tab label="Üyeler" />
       </Tabs>
+
+      {tab === 3 && <TimelineView items={items.data ?? []} onOpen={setOpen} />}
 
       {tab === 0 && (
         <BacklogView project={p} items={items.data ?? []} sprints={sprints.data ?? []}
@@ -111,7 +131,8 @@ export default function ProjectPage() {
       )}
 
       {(tab === 1 || tab === 2) && (
-        <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap", rowGap: 1, alignItems: "center" }}>
+          <TextField size="small" placeholder="Bu projede ara…" value={text} onChange={(e) => setText(e.target.value)} sx={{ width: 200 }} />
           <TextField select size="small" label="Atanan" value={assigneeFilter} sx={{ minWidth: 180 }}
             onChange={(e) => setAssigneeFilter(e.target.value)}>
             <MenuItem value="">Herkes</MenuItem>
@@ -124,6 +145,14 @@ export default function ProjectPage() {
             <MenuItem value="">Tümü</MenuItem>
             {TYPES.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
           </TextField>
+          <TextField select size="small" label="Etiket" value={labelFilter} sx={{ minWidth: 140 }}
+            onChange={(e) => setLabelFilter(e.target.value)}>
+            <MenuItem value="">Tümü</MenuItem>
+            {labelsQ.data?.map((l) => <MenuItem key={l} value={l}>{l}</MenuItem>)}
+          </TextField>
+          <Chip label="Gecikenler" color={onlyOverdue ? "error" : "default"} variant={onlyOverdue ? "filled" : "outlined"}
+            onClick={() => setOnlyOverdue(!onlyOverdue)} />
+          <SavedFilters projectKey={key} current={filterState} onApply={applyFilter} />
         </Stack>
       )}
 
@@ -144,6 +173,7 @@ export default function ProjectPage() {
                       <TypeIcon type={w.type} />
                       <Typography variant="body2" color="primary">{w.key}</Typography>
                       <Typography variant="body2">{w.title}</Typography>
+                      <LabelChips labels={w.labels} />
                     </Stack>
                   </TableCell>
                   <TableCell><Person name={w.assigneeName} /></TableCell>
@@ -151,7 +181,7 @@ export default function ProjectPage() {
                   <TableCell><PriorityText p={w.priority} /></TableCell>
                   <TableCell>{w.storyPoints ?? "—"}</TableCell>
                   <TableCell><StatusChip status={w.status} /></TableCell>
-                  <TableCell>{w.dueDate ? new Date(w.dueDate).toLocaleDateString("tr-TR") : "—"}</TableCell>
+                  <TableCell><DueDate item={w} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -174,7 +204,7 @@ export default function ProjectPage() {
         </DndContext>
       )}
 
-      {tab === 3 && (
+      {tab === 4 && (
         <Card variant="outlined" sx={{ p: 2 }}>
           {p.members.map((m) => (
             <Stack key={m.userId} direction="row" sx={{ alignItems: "center", py: 1 }}>
@@ -185,7 +215,7 @@ export default function ProjectPage() {
         </Card>
       )}
 
-      <WorkItemDialog itemKey={open} project={p} onClose={() => {
+      <WorkItemDialog itemKey={open} project={p} onOpenItem={setOpen} onClose={() => {
         setOpen(null);
         if (params.get("item")) { params.delete("item"); setParams(params, { replace: true }); }
       }} />
@@ -216,13 +246,11 @@ function BoardCard({ item, canDrag, onOpen }: { item: WorkItem; canDrag: boolean
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 10 } : undefined;
   return (
     <Card ref={setNodeRef} style={style} {...listeners} {...attributes} onClick={onOpen}
-      sx={{ p: 1.5, cursor: canDrag ? "grab" : "pointer", opacity: isDragging ? 0.7 : 1, "&:hover": { bgcolor: "action.hover" } }}>
+      sx={{ p: 1.5, cursor: canDrag ? "grab" : "pointer", opacity: isDragging ? 0.7 : 1, "&:hover": { bgcolor: "action.hover" },
+        borderLeft: isOverdue(item) ? "3px solid #f87168" : undefined }}>
       <Typography variant="body2" sx={{ mb: 1 }}>{item.title}</Typography>
-      {item.dueDate && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-          {new Date(item.dueDate).toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" })}
-        </Typography>
-      )}
+      {(item.labels?.length ?? 0) > 0 && <Box sx={{ mb: 1 }}><LabelChips labels={item.labels} /></Box>}
+      {item.dueDate && <Box sx={{ mb: 1 }}><DueDate item={item} short /></Box>}
       <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
         <TypeIcon type={item.type} />
         <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>{item.key}</Typography>
@@ -238,7 +266,8 @@ function BoardCard({ item, canDrag, onOpen }: { item: WorkItem; canDrag: boolean
 
 function CreateDialog({ project, items, sprints, onClose }: { project: ProjectDetail; items: WorkItem[]; sprints: Sprint[]; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ title: "", type: "Task", description: "", priority: "Medium", assigneeId: "", parentId: "", dueDate: "", storyPoints: "", sprintId: "" });
+  const [form, setForm] = useState({ title: "", type: "Task", description: "", priority: "Medium", assigneeId: "", parentId: "", startDate: "", dueDate: "", storyPoints: "", sprintId: "" });
+  const [labels, setLabels] = useState<string[]>([]);
   const [error, setError] = useState("");
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 
@@ -248,8 +277,10 @@ function CreateDialog({ project, items, sprints, onClose }: { project: ProjectDe
       assigneeId: form.assigneeId || null,
       parentId: form.parentId || null,
       dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : null,
+      startDate: form.startDate ? new Date(form.startDate).toISOString() : null,
       storyPoints: form.storyPoints ? Number(form.storyPoints) : null,
       sprintId: form.sprintId || null,
+      labels,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["items", project.key] });
@@ -293,8 +324,13 @@ function CreateDialog({ project, items, sprints, onClose }: { project: ProjectDe
               {sprints.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}{s.status === "active" ? " (aktif)" : ""}</MenuItem>)}
             </TextField>
           </Stack>
-          <TextField type="date" label="Bitiş tarihi" value={form.dueDate} onChange={set("dueDate")}
-            slotProps={{ inputLabel: { shrink: true } }} />
+          <LabelsField projectKey={project.key} value={labels} onChange={setLabels} />
+          <Stack direction="row" spacing={2}>
+            <TextField type="date" label="Başlangıç tarihi" value={form.startDate} onChange={set("startDate")} sx={{ flex: 1 }}
+              slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField type="date" label="Bitiş tarihi" value={form.dueDate} onChange={set("dueDate")} sx={{ flex: 1 }}
+              slotProps={{ inputLabel: { shrink: true } }} />
+          </Stack>
         </Stack>
       </DialogContent>
       <DialogActions>

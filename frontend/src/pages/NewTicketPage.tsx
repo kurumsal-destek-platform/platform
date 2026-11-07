@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Alert, Box, Button, Card, CardContent, Collapse, MenuItem, Stack, TextField, Typography,
+  Alert, Box, Button, Card, CardContent, Chip, Collapse, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 import LightbulbIcon from "@mui/icons-material/LightbulbOutlined";
-import { api, CATEGORIES, errorMessage, PRIORITIES, type Article, type ArticleLite } from "../api";
+import AttachIcon from "@mui/icons-material/AttachFile";
+import { api, CATEGORIES, errorMessage, formatSize, PRIORITIES, type Article, type ArticleLite } from "../api";
 
 function useDebounce<T>(value: T, ms: number) {
   const [v, setV] = useState(value);
@@ -24,6 +25,7 @@ export default function NewTicketPage() {
   const [error, setError] = useState("");
   const [openArticle, setOpenArticle] = useState<string | null>(null);
   const [solved, setSolved] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
 
   const q = useDebounce(`${title} ${description}`.trim(), 500);
   const suggestions = useQuery({
@@ -38,7 +40,15 @@ export default function NewTicketPage() {
   });
 
   const create = useMutation({
-    mutationFn: () => api.post("/api/tickets", { title, description, category, priority }),
+    mutationFn: async () => {
+      const t = (await api.post<{ id: string }>("/api/tickets", { title, description, category, priority })).data;
+      // Seçilen dosyaları ticket'a yükle
+      for (const f of files) {
+        const form = new FormData();
+        form.append("file", f);
+        await api.post(`/api/tickets/${t.id}/attachments`, form);
+      }
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["myTickets"] }); nav("/tickets"); },
     onError: (e) => setError(errorMessage(e)),
   });
@@ -75,6 +85,19 @@ export default function NewTicketPage() {
                 {Object.entries(PRIORITIES).map(([k, v]) => <MenuItem key={k} value={k}>{v}</MenuItem>)}
               </TextField>
             </Stack>
+            <Box>
+              <Button component="label" size="small" startIcon={<AttachIcon />}>
+                Dosya ekle (ekran görüntüsü, log…)
+                <input hidden type="file" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.log,.csv,.docx,.xlsx,.pptx,.zip"
+                  onChange={(e) => { setFiles([...files, ...Array.from(e.target.files ?? [])]); e.target.value = ""; }} />
+              </Button>
+              <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                {files.map((f, i) => (
+                  <Chip key={i} size="small" label={`${f.name} (${formatSize(f.size)})`}
+                    onDelete={() => setFiles(files.filter((_, j) => j !== i))} />
+                ))}
+              </Stack>
+            </Box>
             <Box>
               <Button variant="contained" disabled={!title.trim() || create.isPending} onClick={() => create.mutate()}>
                 Ticket aç

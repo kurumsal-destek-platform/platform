@@ -8,6 +8,7 @@ import AddIcon from "@mui/icons-material/Add";
 import { api, errorMessage, PRIORITIES, TICKET_STATUSES, type Ticket, type UserLite } from "../api";
 import { useAuth } from "../auth";
 import { Person } from "../components/common";
+import TicketDialog from "../components/TicketDialog";
 
 export default function TicketsPage() {
   const { user } = useAuth();
@@ -16,6 +17,7 @@ export default function TicketsPage() {
   const isManager = user?.role === "Manager" || user?.role === "Admin";
   const [tab, setTab] = useState(0);
   const [error, setError] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const mine = useQuery({ queryKey: ["myTickets"], queryFn: async () => (await api.get<Ticket[]>("/api/tickets/mine")).data });
   const all = useQuery({
@@ -60,8 +62,9 @@ export default function TicketsPage() {
               const canStatus = t.assigneeId === user?.id || isManager;
               return (
                 <TableRow key={t.id}>
-                  <TableCell>
-                    <Typography variant="body2">{t.title}</Typography>
+                  <TableCell onClick={() => setOpenId(t.id)} sx={{ cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{t.title}</Typography>
+                    {t.workItemKey && <Chip size="small" color="primary" variant="outlined" label={`→ ${t.workItemKey}`} sx={{ height: 18, fontSize: 11, my: 0.3 }} />}
                     <Typography variant="caption" color="text.secondary">{t.description}</Typography>
                   </TableCell>
                   <TableCell><Chip size="small" label={t.category} /></TableCell>
@@ -90,6 +93,7 @@ export default function TicketsPage() {
           </TableBody>
         </Table>
       </Card>
+      <TicketDialog ticket={rows?.find((t) => t.id === openId) ?? null} onClose={() => setOpenId(null)} />
     </>
   );
 }
