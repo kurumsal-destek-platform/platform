@@ -1,7 +1,10 @@
+# Tek komutla tüm sistem:  docker compose up -d --build
+# Adresler: uygulama http://localhost:5173 · API/Swagger http://localhost:5235/swagger · RAG http://localhost:8000/docs
 services:
   db:
     image: pgvector/pgvector:pg16
     container_name: platform-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: platform
       POSTGRES_PASSWORD: platform
@@ -14,5 +17,49 @@ services:
       test: ["CMD-SHELL", "pg_isready -U platform"]
       interval: 5s
       retries: 10
+
+  api:
+    build: ./backend
+    container_name: platform-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: Host=db;Port=5432;Database=platform;Username=platform;Password=platform
+      Rag__Url: http://rag:8000
+    ports:
+      - "5235:8080"
+
+  rag:
+    build: ./rag-service
+    container_name: platform-rag
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://platform:platform@db:5432/platform
+      # Ollama Docker'da değil, bilgisayarın kendisinde çalışır
+      OLLAMA_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:5235
+    container_name: platform-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
+
 volumes:
   pgdata:
