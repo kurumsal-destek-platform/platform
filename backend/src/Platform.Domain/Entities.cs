@@ -93,6 +93,9 @@ public class WorkItem : ITenantEntity
     public Guid? AssigneeId { get; set; }
     public Guid ReporterId { get; set; }
     public DateTime? DueDate { get; set; }
+    public int? StoryPoints { get; set; }
+    public Guid? SprintId { get; set; }      // null = backlog
+    public int Rank { get; set; }            // backlog sırası
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
@@ -120,6 +123,7 @@ public class Ticket : ITenantEntity
     public Guid? AssigneeId { get; set; }
     public string? ResolutionNote { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? ResolvedAt { get; set; }
 }
 
 public class Article : ITenantEntity
@@ -140,5 +144,52 @@ public class KbFeedback : ITenantEntity
     public Guid UserId { get; set; }
     public Guid? ArticleId { get; set; }
     public bool Solved { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public static class SprintStatus
+{
+    public const string Planned = "planned";
+    public const string Active = "active";
+    public const string Closed = "closed";
+}
+
+public class Sprint : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid ProjectId { get; set; }
+    public string Name { get; set; } = "";
+    public string Goal { get; set; } = "";
+    public string Status { get; set; } = SprintStatus.Planned;
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Kim, neyi, ne zaman değiştirdi
+public class ActivityLog : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid? ProjectId { get; set; }
+    public Guid? WorkItemId { get; set; }
+    public Guid UserId { get; set; }
+    public string Action { get; set; } = "";     // created, status, assignee, comment, updated, sprint
+    public string? Field { get; set; }
+    public string? OldValue { get; set; }
+    public string? NewValue { get; set; }
+    public DateTime At { get; set; } = DateTime.UtcNow;
+}
+
+public class Notification : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid UserId { get; set; }             // bildirimi alan
+    public string Title { get; set; } = "";
+    public string Body { get; set; } = "";
+    public string? Link { get; set; }            // frontend adresi, ör. /projects/ANK?item=ANK-3
+    public bool IsRead { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

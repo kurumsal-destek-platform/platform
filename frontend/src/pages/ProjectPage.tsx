@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert, Box, Button, Card, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Snackbar, Stack, Tab, Table,
@@ -9,8 +9,9 @@ import AddIcon from "@mui/icons-material/Add";
 import LockIcon from "@mui/icons-material/LockOutlined";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import {
-  api, errorMessage, PRIORITIES, STATUSES, TYPES, type ProjectDetail, type WorkItem,
+  api, errorMessage, PRIORITIES, STATUSES, TYPES, type ProjectDetail, type Sprint, type WorkItem,
 } from "../api";
+import BacklogView from "../components/BacklogView";
 import { useAuth } from "../auth";
 import { Person, PriorityText, StatusChip, TypeIcon } from "../components/common";
 import WorkItemDialog from "../components/WorkItemDialog";
@@ -19,8 +20,18 @@ export default function ProjectPage() {
   const { key = "" } = useParams();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [tab, setTab] = useState(1);
-  const [open, setOpen] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const TAB_NAMES = ["backlog", "board", "list", "members"];
+  const [tab, setTab] = useState(Math.max(0, TAB_NAMES.indexOf(params.get("tab") ?? "board")));
+  const [open, setOpen] = useState<string | null>(params.get("item"));
+
+  // Bildirim ya da aramadan ?item=ANK-3 ile gelinirse detayı aç
+  useEffect(() => {
+    const it = params.get("item");
+    if (it) setOpen(it);
+    const t = params.get("tab");
+    if (t && TAB_NAMES.includes(t)) setTab(TAB_NAMES.indexOf(t));
+  }, [params]); // eslint-disable-line
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("");
@@ -35,9 +46,15 @@ export default function ProjectPage() {
     queryFn: async () => (await api.get<WorkItem[]>(`/api/projects/${key}/items`)).data,
   });
 
+  const sprints = useQuery({
+    queryKey: ["sprints", key],
+    queryFn: async () => (await api.get<Sprint[]>(`/api/projects/${key}/sprints`)).data,
+  });
+  const active = sprints.data?.find((s) => s.status === "active");
+
   const moveStatus = useMutation({
     mutationFn: ({ k, s }: { k: string; s: string }) => api.patch(`/api/items/${k}/status`, { status: s }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["items", key] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["items", key] }); qc.invalidateQueries({ queryKey: ["sprints", key] }); },
     onError: (e) => { setToast(errorMessage(e)); qc.invalidateQueries({ queryKey: ["items", key] }); },
   });
 
@@ -49,6 +66,9 @@ export default function ProjectPage() {
   const filtered = (items.data ?? []).filter((w) =>
     (!assigneeFilter || (assigneeFilter === "none" ? !w.assigneeId : w.assigneeId === assigneeFilter)) &&
     (!typeFilter || w.type === typeFilter));
+  // Pano, aktif sprint varsa sadece onun işlerini gösterir (Jira'daki gibi)
+  const boardItems = active ? filtered.filter((w) => w.sprintId === active.id) : filtered.filter((w) => w.type !== "Epic");
+  const daysLeft = active?.endDate ? Math.ceil((new Date(active.endDate).getTime() - Date.now()) / 86400000) : null;
 
   const onDragEnd = (e: DragEndEvent) => {
     const item = items.data?.find((w) => w.key === e.active.id);
@@ -66,11 +86,31 @@ export default function ProjectPage() {
         <Typography variant="h5" sx={{ fontWeight: 700, flex: 1 }}>{p.name}</Typography>
         {isManager && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>Oluştur</Button>}
       </Stack>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}>
-        <Tab label="Liste" /><Tab label="Pano" /><Tab label="Üyeler" />
+      <Tabs value={tab} onChange={(_, v) => { setTab(v); setParams({ tab: TAB_NAMES[v] }, { replace: true }); }}
+        sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}>
+        <Tab label="Backlog" /><Tab label="Pano" /><Tab label="Liste" /><Tab label="Üyeler" />
       </Tabs>
 
-      {tab !== 2 && (
+      {tab === 0 && (
+        <BacklogView project={p} items={items.data ?? []} sprints={sprints.data ?? []}
+          onOpen={setOpen} onError={setToast} />
+      )}
+
+      {tab === 1 && (
+        <Box sx={{ mb: 2 }}>
+          {active ? (
+            <Typography variant="body2" color="text.secondary">
+              <b>{active.name}</b>{active.goal && ` · ${active.goal}`}
+              {daysLeft != null && ` · ${daysLeft > 0 ? `${daysLeft} gün kaldı` : "süresi doldu"}`}
+              {` · ${active.donePoints ?? 0}/${active.points ?? 0} puan tamamlandı`}
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary">Aktif sprint yok; tüm işler gösteriliyor. Backlog sekmesinden sprint başlatabilirsiniz.</Typography>
+          )}
+        </Box>
+      )}
+
+      {(tab === 1 || tab === 2) && (
         <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
           <TextField select size="small" label="Atanan" value={assigneeFilter} sx={{ minWidth: 180 }}
             onChange={(e) => setAssigneeFilter(e.target.value)}>
@@ -87,13 +127,13 @@ export default function ProjectPage() {
         </Stack>
       )}
 
-      {tab === 0 && (
+      {tab === 2 && (
         <Card variant="outlined">
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>Bilet</TableCell><TableCell>Atanan</TableCell><TableCell>Raporlayan</TableCell>
-                <TableCell>Öncelik</TableCell><TableCell>Durum</TableCell><TableCell>Bitiş</TableCell>
+                <TableCell>Öncelik</TableCell><TableCell>Puan</TableCell><TableCell>Durum</TableCell><TableCell>Bitiş</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -109,6 +149,7 @@ export default function ProjectPage() {
                   <TableCell><Person name={w.assigneeName} /></TableCell>
                   <TableCell><Person name={w.reporterName} /></TableCell>
                   <TableCell><PriorityText p={w.priority} /></TableCell>
+                  <TableCell>{w.storyPoints ?? "—"}</TableCell>
                   <TableCell><StatusChip status={w.status} /></TableCell>
                   <TableCell>{w.dueDate ? new Date(w.dueDate).toLocaleDateString("tr-TR") : "—"}</TableCell>
                 </TableRow>
@@ -123,8 +164,8 @@ export default function ProjectPage() {
           <Stack direction="row" spacing={2} sx={{ overflowX: "auto", pb: 2, alignItems: "flex-start" }}>
             {STATUSES.map((s) => (
               <Column key={s.key} id={s.key} title={s.label}
-                count={filtered.filter((w) => w.status === s.key).length}>
-                {filtered.filter((w) => w.status === s.key).map((w) => (
+                count={boardItems.filter((w) => w.status === s.key).length}>
+                {boardItems.filter((w) => w.status === s.key).map((w) => (
                   <BoardCard key={w.id} item={w} canDrag={w.assigneeId === user!.id} onOpen={() => setOpen(w.key)} />
                 ))}
               </Column>
@@ -133,7 +174,7 @@ export default function ProjectPage() {
         </DndContext>
       )}
 
-      {tab === 2 && (
+      {tab === 3 && (
         <Card variant="outlined" sx={{ p: 2 }}>
           {p.members.map((m) => (
             <Stack key={m.userId} direction="row" sx={{ alignItems: "center", py: 1 }}>
@@ -144,8 +185,11 @@ export default function ProjectPage() {
         </Card>
       )}
 
-      <WorkItemDialog itemKey={open} project={p} onClose={() => setOpen(null)} />
-      {creating && <CreateDialog project={p} items={items.data ?? []} onClose={() => setCreating(false)} />}
+      <WorkItemDialog itemKey={open} project={p} onClose={() => {
+        setOpen(null);
+        if (params.get("item")) { params.delete("item"); setParams(params, { replace: true }); }
+      }} />
+      {creating && <CreateDialog project={p} items={items.data ?? []} sprints={sprints.data ?? []} onClose={() => setCreating(false)} />}
       <Snackbar open={!!toast} autoHideDuration={4000} onClose={() => setToast("")}>
         <Alert severity="error" variant="filled" onClose={() => setToast("")}>{toast}</Alert>
       </Snackbar>
@@ -182,6 +226,9 @@ function BoardCard({ item, canDrag, onOpen }: { item: WorkItem; canDrag: boolean
       <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
         <TypeIcon type={item.type} />
         <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>{item.key}</Typography>
+        {item.storyPoints != null && (
+          <Box sx={{ px: 0.8, borderRadius: 2, bgcolor: "action.selected", fontSize: 11 }}>{item.storyPoints}</Box>
+        )}
         {!canDrag && <LockIcon sx={{ fontSize: 14, color: "text.disabled" }} titleAccess="Sadece atanan kişi taşıyabilir" />}
         <Person name={item.assigneeName ? item.assigneeName.split(" ")[0] : null} />
       </Stack>
@@ -189,9 +236,9 @@ function BoardCard({ item, canDrag, onOpen }: { item: WorkItem; canDrag: boolean
   );
 }
 
-function CreateDialog({ project, items, onClose }: { project: ProjectDetail; items: WorkItem[]; onClose: () => void }) {
+function CreateDialog({ project, items, sprints, onClose }: { project: ProjectDetail; items: WorkItem[]; sprints: Sprint[]; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ title: "", type: "Task", description: "", priority: "Medium", assigneeId: "", parentId: "", dueDate: "" });
+  const [form, setForm] = useState({ title: "", type: "Task", description: "", priority: "Medium", assigneeId: "", parentId: "", dueDate: "", storyPoints: "", sprintId: "" });
   const [error, setError] = useState("");
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 
@@ -201,8 +248,14 @@ function CreateDialog({ project, items, onClose }: { project: ProjectDetail; ite
       assigneeId: form.assigneeId || null,
       parentId: form.parentId || null,
       dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : null,
+      storyPoints: form.storyPoints ? Number(form.storyPoints) : null,
+      sprintId: form.sprintId || null,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["items", project.key] }); onClose(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["items", project.key] });
+      qc.invalidateQueries({ queryKey: ["sprints", project.key] });
+      onClose();
+    },
     onError: (e) => setError(errorMessage(e)),
   });
 
@@ -230,6 +283,16 @@ function CreateDialog({ project, items, onClose }: { project: ProjectDetail; ite
           <TextField select label="Öncelik" value={form.priority} onChange={set("priority")}>
             {Object.entries(PRIORITIES).map(([k, v]) => <MenuItem key={k} value={k}>{v}</MenuItem>)}
           </TextField>
+          <Stack direction="row" spacing={2}>
+            <TextField select label="Story point" value={form.storyPoints} onChange={set("storyPoints")} sx={{ flex: 1 }}>
+              <MenuItem value="">—</MenuItem>
+              {[1, 2, 3, 5, 8, 13].map((n) => <MenuItem key={n} value={String(n)}>{n}</MenuItem>)}
+            </TextField>
+            <TextField select label="Sprint" value={form.sprintId} onChange={set("sprintId")} sx={{ flex: 1 }}>
+              <MenuItem value="">Backlog</MenuItem>
+              {sprints.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}{s.status === "active" ? " (aktif)" : ""}</MenuItem>)}
+            </TextField>
+          </Stack>
           <TextField type="date" label="Bitiş tarihi" value={form.dueDate} onChange={set("dueDate")}
             slotProps={{ inputLabel: { shrink: true } }} />
         </Stack>

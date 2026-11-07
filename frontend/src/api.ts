@@ -51,9 +51,42 @@ export interface WorkItem {
   parentId?: string | null; parentKey?: string | null;
   assigneeId?: string | null; assigneeName?: string | null;
   reporterId: string; reporterName?: string | null;
+  storyPoints?: number | null; sprintId?: string | null; rank?: number;
+}
+export interface Sprint {
+  id: string; name: string; goal: string; status: "planned" | "active" | "closed";
+  startDate?: string | null; endDate?: string | null; itemCount?: number; points?: number; donePoints?: number;
+}
+export interface Activity {
+  id: string; action: string; field?: string | null; oldValue?: string | null; newValue?: string | null;
+  at: string; userName?: string | null; itemKey?: string | null;
+}
+export interface NotificationT { id: string; title: string; body: string; link?: string | null; isRead: boolean; createdAt: string }
+export interface SearchResult {
+  items: { key: string; title: string; type: string; status: string; projectKey: string }[];
+  tickets: { id: string; title: string; status: string }[];
+  articles: { id: string; title: string; category: string }[];
+}
+export interface Dashboard {
+  workItems: {
+    total: number; overdue: number; unassigned: number;
+    byStatus: { status: string; count: number }[];
+    byAssignee: { name: string; open: number; points: number }[];
+  };
+  tickets: {
+    total: number; open: number; avgResolutionHours: number | null;
+    byStatus: { status: string; count: number }[];
+    byCategory: { category: string; count: number }[];
+  };
+  selfService: { solvedWithoutTicket: number; ticketsCreated: number; deflectionRate: number };
+  projects: {
+    key: string; name: string; total: number; done: number;
+    activeSprint: { name: string; endDate: string; points: number; donePoints: number } | null;
+  }[];
 }
 export interface WorkItemDetail {
   item: WorkItem; children: WorkItem[];
+  sprint?: { id: string; name: string; status: string } | null;
   permissions: { canEdit: boolean; canAssign: boolean; canComment: boolean };
 }
 export interface CommentT { id: string; body: string; createdAt: string; authorId: string; authorName?: string }
@@ -82,3 +115,27 @@ export const TICKET_STATUSES: Record<string, string> = {
 export const CATEGORIES = ["Donanım", "Yazılım/Lisans", "Ağ/VPN", "Erişim/Hesap", "E-posta", "Diğer"];
 export const PRIORITIES: Record<string, string> = { Low: "Düşük", Medium: "Orta", High: "Yüksek", Critical: "Kritik" };
 export const TYPES = ["Epic", "Story", "Task", "Bug", "Subtask"];
+
+// Geçmiş satırını Türkçe cümleye çevirir
+export function describeActivity(a: Activity): string {
+  const v = (x?: string | null) => (x ? (STATUSES.find((s) => s.key === x)?.label ?? x) : "—");
+  switch (a.action) {
+    case "created": return "oluşturdu";
+    case "comment": return "yorum yazdı";
+    case "status": return `durumu değiştirdi: ${v(a.oldValue)} → ${v(a.newValue)}`;
+    case "assignee": return `atananı değiştirdi: ${v(a.oldValue)} → ${v(a.newValue)}`;
+    case "sprint": return `sprinte taşıdı: ${v(a.oldValue)} → ${v(a.newValue)}`;
+    case "updated": return a.oldValue || a.newValue
+      ? `${a.field} alanını değiştirdi: ${v(a.oldValue)} → ${v(a.newValue)}`
+      : `${a.field} alanını güncelledi`;
+    default: return a.action;
+  }
+}
+
+export function timeAgo(iso: string): string {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return "az önce";
+  if (s < 3600) return `${Math.floor(s / 60)} dk önce`;
+  if (s < 86400) return `${Math.floor(s / 3600)} sa önce`;
+  return `${Math.floor(s / 86400)} gün önce`;
+}

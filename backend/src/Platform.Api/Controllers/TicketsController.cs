@@ -31,6 +31,10 @@ public class TicketsController : ApiControllerBase
             Category = req.Category ?? "Diğer", Priority = req.Priority ?? "Medium", ReporterId = Me,
         };
         Db.Tickets.Add(t);
+        // Yöneticilere yeni ticket bildirimi
+        var managers = await Db.Users.Where(u => u.Role == Roles.Manager || u.Role == Roles.Admin).Select(u => u.Id).ToListAsync();
+        foreach (var m in managers)
+            Events.Notify(Db, t.TenantId, m, Me, $"Yeni ticket: {t.Category}", t.Title, "/tickets");
         await Db.SaveChangesAsync();
         return Ok(ToDto(t, await UserNamesAsync()));
     }
@@ -77,6 +81,8 @@ public class TicketsController : ApiControllerBase
 
         t.AssigneeId = req.AssigneeId;
         if (t.Status == TicketStatus.Open && req.AssigneeId is not null) t.Status = TicketStatus.Assigned;
+        if (req.AssigneeId is Guid to)
+            Events.Notify(Db, t.TenantId, to, Me, "Size bir ticket atandı", t.Title, "/tickets");
         await Db.SaveChangesAsync();
         return Ok(ToDto(t, await UserNamesAsync()));
     }
@@ -90,8 +96,13 @@ public class TicketsController : ApiControllerBase
         if (t.AssigneeId != Me && !IsManagerOrAdmin) return Forbidden("Durumu sadece atanan kişi veya yönetici değiştirebilir.");
         if (!TicketStatus.All.Contains(req.Status)) return BadRequest(new { message = "Geçersiz durum." });
 
+        if (t.Status != req.Status)
+            Events.Notify(Db, t.TenantId, t.ReporterId, Me, "Ticket durumunuz güncellendi",
+                $"{t.Title} → {Events.StatusLabel(req.Status)}", "/tickets");
         t.Status = req.Status;
         if (req.ResolutionNote is not null) t.ResolutionNote = req.ResolutionNote;
+        if (req.Status is TicketStatus.Resolved or TicketStatus.Closed) t.ResolvedAt ??= DateTime.UtcNow;
+        else t.ResolvedAt = null;
         await Db.SaveChangesAsync();
         return Ok(ToDto(t, await UserNamesAsync()));
     }

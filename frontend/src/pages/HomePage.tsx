@@ -32,7 +32,7 @@ export default function HomePage() {
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Bana atananlar ({myItems.data?.length ?? 0})</Typography>
             {myItems.data?.length === 0 && <Typography color="text.secondary">Açık göreviniz yok.</Typography>}
             {myItems.data?.map((w) => (
-              <Stack key={w.id} direction="row" spacing={1} onClick={() => nav(`/projects/${w.projectKey}`)}
+              <Stack key={w.id} direction="row" spacing={1} onClick={() => nav(`/projects/${w.projectKey}?item=${w.key}`)}
                 sx={{ alignItems: "center", py: 1, cursor: "pointer", "&:hover": { bgcolor: "action.hover" }, px: 1, borderRadius: 1 }}>
                 <TypeIcon type={w.type} />
                 <Typography variant="body2" color="primary">{w.key}</Typography>

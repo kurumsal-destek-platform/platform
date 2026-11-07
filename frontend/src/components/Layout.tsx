@@ -9,6 +9,8 @@ import BookIcon from "@mui/icons-material/MenuBookOutlined";
 import ChatIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import LogoutIcon from "@mui/icons-material/Logout";
+import DashboardIcon from "@mui/icons-material/InsightsOutlined";
+import TopBar from "./TopBar";
 import { useAuth } from "../auth";
 
 const NAV = [
@@ -25,6 +27,10 @@ export const initials = (name?: string | null) =>
 export default function Layout() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
+  const isManager = user?.role === "Manager" || user?.role === "Admin";
+  const items = isManager
+    ? [...NAV.slice(0, 1), { to: "/dashboard", label: "Gösterge paneli", icon: <DashboardIcon /> }, ...NAV.slice(1)]
+    : NAV;
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -38,7 +44,7 @@ export default function Layout() {
           Ticket oluştur
         </Button>
         <List dense sx={{ flex: 1 }}>
-          {NAV.map((n) => (
+          {items.map((n) => (
             <ListItemButton key={n.to} component={NavLink} to={n.to} end={n.to === "/"}
               sx={{ borderRadius: 1, "&.active": { bgcolor: "action.selected", color: "primary.main" } }}>
               <ListItemIcon sx={{ minWidth: 36, color: "inherit" }}>{n.icon}</ListItemIcon>
@@ -61,6 +67,7 @@ export default function Layout() {
 
       {/* İçerik */}
       <Box sx={{ flex: 1, p: 3, minWidth: 0 }}>
+        <TopBar />
         <Outlet />
       </Box>
     </Box>
