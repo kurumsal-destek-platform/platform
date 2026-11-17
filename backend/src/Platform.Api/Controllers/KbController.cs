@@ -8,7 +8,7 @@ using Platform.Infrastructure;
 namespace Platform.Api.Controllers;
 
 public record CreateArticleRequest(string Title, string Body, string? Category);
-public record FeedbackRequest(Guid? ArticleId, bool Solved);
+public record FeedbackRequest(Guid? ArticleId, bool Solved, string? Source = null, int? StepsTried = null);
 public record AskRequest(string Question);
 
 [Route("api")]
@@ -17,27 +17,29 @@ public class KbController : ApiControllerBase
     private readonly IHttpClientFactory _http;
     private readonly IConfiguration _config;
     private readonly ILogger<KbController> _log;
+    private readonly RagClient _rag;
 
-    public KbController(AppDbContext db, IHttpClientFactory http, IConfiguration config, ILogger<KbController> log) : base(db)
+    public KbController(AppDbContext db, IHttpClientFactory http, IConfiguration config, ILogger<KbController> log, RagClient rag) : base(db)
     {
-        _http = http; _config = config; _log = log;
+        _http = http; _config = config; _log = log; _rag = rag;
     }
 
     [HttpGet("kb/articles")]
-    public async Task<IActionResult> Articles([FromQuery] string? q, [FromQuery] string? category)
+    public async Task<IActionResult> Articles([FromQuery] string? q, [FromQuery] string? category, [FromQuery] bool drafts = false)
     {
-        var all = await Db.Articles.Where(a => a.Published).ToListAsync();
+        // Yöneticiler taslakları da görebilir
+        var all = await Db.Articles.Where(a => a.Published || (drafts && IsManagerOrAdmin)).ToListAsync();
         if (!string.IsNullOrEmpty(category)) all = all.Where(a => a.Category == category).ToList();
         var result = string.IsNullOrWhiteSpace(q) ? all.OrderBy(a => a.Title).ToList()
             : KbSearch.Rank(all, q, 50).Select(x => x.Article).ToList();
-        return Ok(result.Select(a => new { a.Id, a.Title, a.Category, snippet = Snip(a.Body, 160) }));
+        return Ok(result.Select(a => new { a.Id, a.Title, a.Category, a.Published, fromTicket = a.SourceTicketId != null, snippet = Snip(a.Body, 160) }));
     }
 
     [HttpGet("kb/articles/{id:guid}")]
     public async Task<IActionResult> Article(Guid id)
     {
         var a = await Db.Articles.FirstOrDefaultAsync(x => x.Id == id);
-        return a is null ? NotFound() : Ok(a);
+        return a is null || (!a.Published && !IsManagerOrAdmin) ? NotFound() : Ok(a);
     }
 
     [HttpPost("kb/articles")]
@@ -47,6 +49,31 @@ public class KbController : ApiControllerBase
         var a = new Article { Title = req.Title, Body = req.Body, Category = req.Category ?? "Diğer" };
         Db.Articles.Add(a);
         await Db.SaveChangesAsync();
+        _rag.ReindexInBackground(a.TenantId); // asistan yeni bilgiyi hemen kullansın
+        return Ok(a);
+    }
+
+    [HttpPut("kb/articles/{id:guid}")]
+    public async Task<IActionResult> UpdateArticle(Guid id, CreateArticleRequest req)
+    {
+        if (!IsManagerOrAdmin) return Forbidden("Makale düzenlemek için yönetici olmalısınız.");
+        var a = await Db.Articles.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return NotFound();
+        a.Title = req.Title; a.Body = req.Body; a.Category = req.Category ?? a.Category;
+        await Db.SaveChangesAsync();
+        _rag.ReindexInBackground(a.TenantId); // asistan yeni bilgiyi hemen kullansın
+        return Ok(a);
+    }
+
+    [HttpPost("kb/articles/{id:guid}/publish")]
+    public async Task<IActionResult> Publish(Guid id, [FromQuery] bool published = true)
+    {
+        if (!IsManagerOrAdmin) return Forbidden("Yayınlamak için yönetici olmalısınız.");
+        var a = await Db.Articles.FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return NotFound();
+        a.Published = published;
+        await Db.SaveChangesAsync();
+        _rag.ReindexInBackground(a.TenantId); // asistan yeni bilgiyi hemen kullansın
         return Ok(a);
     }
 
@@ -63,7 +90,8 @@ public class KbController : ApiControllerBase
     [HttpPost("kb/feedback")]
     public async Task<IActionResult> Feedback(FeedbackRequest req)
     {
-        Db.KbFeedbacks.Add(new KbFeedback { UserId = Me, ArticleId = req.ArticleId, Solved = req.Solved });
+        var source = req.Source is "wizard" or "assistant" ? req.Source : "article";
+        Db.KbFeedbacks.Add(new KbFeedback { UserId = Me, ArticleId = req.ArticleId, Solved = req.Solved, Source = source, StepsTried = req.StepsTried });
         await Db.SaveChangesAsync();
         return NoContent();
     }
@@ -84,7 +112,12 @@ public class KbController : ApiControllerBase
                 var resp = await client.PostAsJsonAsync($"{ragUrl.TrimEnd('/')}/ask",
                     new { tenant_id = tenantId, question = req.Question, user_id = Me.ToString() });
                 if (resp.IsSuccessStatusCode)
-                    return Ok(await resp.Content.ReadFromJsonAsync<JsonElement>());
+                {
+                    var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
+                    var ok = json.TryGetProperty("answered", out var an) && an.ValueKind == JsonValueKind.True;
+                    await LogQuestionAsync(req.Question, ok);
+                    return Ok(json);
+                }
                 _log.LogWarning("RAG servisi {Code} döndü, yedek aramaya geçiliyor.", (int)resp.StatusCode);
             }
             catch (Exception ex)
@@ -97,6 +130,7 @@ public class KbController : ApiControllerBase
         var hits = KbSearch.Rank(all, req.Question ?? "");
         if (hits.Count == 0 || hits[0].Score < 2)
         {
+            await LogQuestionAsync(req.Question, false);
             return Ok(new
             {
                 answered = false,
@@ -106,12 +140,25 @@ public class KbController : ApiControllerBase
         }
 
         var best = hits[0].Article;
+        await LogQuestionAsync(req.Question, true);
         return Ok(new
         {
             answered = true,
             answer = $"{best.Title}: {best.Body}",
             sources = hits.Select(h => new { source_id = h.Article.Id, title = h.Article.Title }),
         });
+    }
+
+    // Bilgi boşluğu radarı için her soruyu kaydet (hata olursa cevabı engellemesin)
+    private async Task LogQuestionAsync(string? question, bool answered)
+    {
+        if (string.IsNullOrWhiteSpace(question)) return;
+        try
+        {
+            Db.AssistantQueries.Add(new AssistantQuery { UserId = Me, Question = TextUtil.Snip(question.Trim(), 500), Answered = answered });
+            await Db.SaveChangesAsync();
+        }
+        catch (Exception ex) { _log.LogWarning(ex, "Soru kaydedilemedi"); }
     }
 
     private static string Snip(string s, int n) => s.Length <= n ? s : s[..n] + "…";

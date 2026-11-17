@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Platform.Domain;
 using Platform.Infrastructure;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Platform.Api.Controllers;
 
@@ -13,7 +15,70 @@ public record LoginRequest(string Email, string Password);
 public class AuthController : ApiControllerBase
 {
     private readonly JwtSettings _jwt;
-    public AuthController(AppDbContext db, JwtSettings jwt) : base(db) { _jwt = jwt; }
+    private readonly IEmailSender _email;
+    private readonly IConfiguration _config;
+    private readonly ITimeLimitedDataProtector _protector;
+
+    public AuthController(AppDbContext db, JwtSettings jwt, IEmailSender email,
+        IConfiguration config, IDataProtectionProvider dp) : base(db)
+    {
+        _jwt = jwt;
+        _email = email;
+        _config = config;
+        _protector = dp.CreateProtector("password-reset").ToTimeLimitedDataProtector();
+    }
+
+    public record ForgotRequest(string Email);
+    public record ResetRequest(string Token, string NewPassword);
+
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(ForgotRequest req)
+    {
+        var email = (req.Email ?? "").Trim().ToLowerInvariant();
+        var user = await Db.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Email == email && u.IsActive);
+        if (user is not null)
+        {
+            var token = _protector.Protect($"{user.Id}|{user.SecurityStamp}", TimeSpan.FromHours(1));
+            var baseUrl = _config["App:FrontendUrl"] ?? "http://localhost:5173";
+            var link = $"{baseUrl}/reset-password?token={Uri.EscapeDataString(token)}";
+            try
+            {
+                await _email.SendAsync(user.Email, "Şifre sıfırlama",
+                    $"<p>Merhaba {user.FullName},</p><p>Şifrenizi sıfırlamak için <a href=\"{link}\">buraya tıklayın</a>. Bağlantı 1 saat geçerlidir.</p>");
+            }
+            catch (Exception ex) { Console.WriteLine("E-posta gönderilemedi: " + ex); }
+        }
+        // Kullanıcı var mı yok mu belli etmemek için hep aynı yanıt.
+        return Ok(new { message = "E-posta adresi kayıtlıysa sıfırlama bağlantısı gönderildi." });
+    }
+
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.NewPassword) || req.NewPassword.Length < 8)
+            return BadRequest(new { message = "Şifre en az 8 karakter olmalı." });
+
+        string payload;
+        try { payload = _protector.Unprotect(req.Token); }
+        catch { return BadRequest(new { message = "Bağlantı geçersiz ya da süresi dolmuş." }); }
+
+        var parts = payload.Split('|');
+        if (parts.Length != 2 || !Guid.TryParse(parts[0], out var userId))
+            return BadRequest(new { message = "Bağlantı geçersiz." });
+
+        var user = await Db.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == userId);
+        if (user is null || !user.IsActive || user.SecurityStamp != parts[1])
+            return BadRequest(new { message = "Bağlantı geçersiz ya da daha önce kullanılmış." });
+
+        user.PasswordHash = new PasswordHasher<User>().HashPassword(user, req.NewPassword);
+        user.SecurityStamp = Guid.NewGuid().ToString("N"); // eski oturumlar ve bu bağlantı geçersiz olur
+        await Db.SaveChangesAsync();
+        return Ok(new { message = "Şifre güncellendi." });
+    }
 
     [AllowAnonymous]
     [HttpPost("login")]

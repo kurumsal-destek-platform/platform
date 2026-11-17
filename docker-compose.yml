@@ -1,5 +1,6 @@
 # Tek komutla tüm sistem:  docker compose up -d --build
 # Adresler: uygulama http://localhost:5173 · API/Swagger http://localhost:5235/swagger · RAG http://localhost:8000/docs
+#           Test e-postaları (Mailpit) http://localhost:8025
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -7,7 +8,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: platform
-      POSTGRES_PASSWORD: platform
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-platform}   # canlıda .env'de mutlaka değiştirin
       POSTGRES_DB: platform
     ports:
       - "5432:5432"
@@ -25,13 +26,69 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: ${APP_ENV:-Development}
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Default: Host=db;Port=5432;Database=platform;Username=platform;Password=platform
+      ConnectionStrings__Default: Host=db;Port=5432;Database=platform;Username=platform;Password=${DB_PASSWORD:-platform}
+      # Demo şirketleri (Anka, Mavi) yüklensin mi? Gerçek kurulumda .env'de DEMO_DATA=false
+      Seed__Demo: ${DEMO_DATA:-true}
+      Logging__Json: ${LOG_JSON:-false}
       Rag__Url: http://rag:8000
+      Uploads__Path: /app/uploads
+      # E-postalar gerçek kutulara değil Mailpit'e gider (http://localhost:8025)
+      # .env'de SMTP_HOST varsa gerçek e-posta (ör. Gmail), yoksa Mailpit kullanılır
+      Smtp__Host: ${SMTP_HOST:-mailpit}
+      Smtp__Port: ${SMTP_PORT:-1025}
+      Smtp__Ssl: ${SMTP_SSL:-false}
+      Smtp__User: ${SMTP_USER:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__From: ${SMTP_FROM:-destek@platform.local}
+      App__FrontendUrl: http://localhost:5173
+      # Makale taslaklarını yazan yerel yapay zekâ (bilgisayardaki Ollama). Kapalıysa şablon kullanılır.
+      Ollama__Url: http://host.docker.internal:11434
+      Ollama__Model: qwen2.5:3b
+      Jwt__Key: ${JWT_KEY:-gelistirme-icin-en-az-32-karakterlik-gizli-anahtar-123}
+      Logging__LogLevel__Microsoft.AspNetCore.Authentication: "Debug"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5235:8080"
+    volumes:
+      - uploads:/app/uploads   # ekler konteyner yeniden kurulunca kaybolmasın
+
+  # Sahte e-posta sunucusu: uygulamanın gönderdiği tüm mailleri web arayüzünde gösterir
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: platform-mail
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # web arayüzü
+      - "1025:1025"   # SMTP (F5 ile çalıştırırken localhost:1025 kullanılır)
+
+  # Günlük otomatik yedek: açılışta bir kez, sonra her 24 saatte; son 7 gün saklanır (./backups klasörü)
+  # Geri yükleme:  docker compose exec -T db pg_restore -U platform -d platform --clean < backups/DOSYA.dump
+  backup:
+    image: pgvector/pgvector:pg16
+    container_name: platform-backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-platform}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          f=/backups/platform-$$(date +%Y%m%d-%H%M).dump
+          pg_dump -h db -U platform -d platform -Fc -f "$$f" && echo "Yedek alındı: $$f"
+          find /backups -name 'platform-*.dump' -mtime +7 -delete
+          sleep 86400
+        done
 
   rag:
     build: ./rag-service
@@ -41,9 +98,11 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://platform:platform@db:5432/platform
+      DATABASE_URL: postgresql://platform:${DB_PASSWORD:-platform}@db:5432/platform
       # Ollama Docker'da değil, bilgisayarın kendisinde çalışır
       OLLAMA_URL: http://host.docker.internal:11434
+      # Güven eşiği: eval/run_eval.py raporundaki "Önerilen eşik" buraya yazılır (.env'de RAG_THRESHOLD=0.5 gibi)
+      SCORE_THRESHOLD: ${RAG_THRESHOLD:-0.45}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -63,3 +122,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

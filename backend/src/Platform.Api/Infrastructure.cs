@@ -36,6 +36,7 @@ public static class TokenService
             new Claim("role", u.Role),
             new Claim("name", u.FullName),
             new Claim("email", u.Email),
+            new Claim("stamp", u.SecurityStamp),
         };
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(s.Key));
         var token = new JwtSecurityToken(

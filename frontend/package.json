@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "fe",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,16 +7,20 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@microsoft/signalr": "^8.0.7",
     "@mui/icons-material": "^9.5.0",
     "@mui/material": "^9.5.0",
     "@tanstack/react-query": "^5.106.1",
+    "@types/canvas-confetti": "^1.6.4",
     "axios": "^1.21.0",
+    "canvas-confetti": "^1.9.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5"
@@ -28,6 +32,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "vitest": "^2.1.8"
   }
 }

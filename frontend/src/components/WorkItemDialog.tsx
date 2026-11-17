@@ -9,13 +9,15 @@ import {
   api, describeActivity, errorMessage, PRIORITIES, STATUSES, timeAgo,
   type Activity, type CommentT, type ProjectDetail, type WorkItemDetail,
 } from "../api";
-import { Person, PriorityText, StatusChip, TypeIcon } from "./common";
+import { DueDate, LabelChips, Person, PriorityText, TypeIcon } from "./common";
 import MentionInput, { MentionText } from "./MentionInput";
+import Attachments from "./Attachments";
+import { LabelsField, LinksSection, SubtasksSection } from "./ItemSections";
 
 // Görev detayı. Atanan kişi düzenler, diğer üyeler salt okunur görür ve yorum yazar,
 // proje yöneticisi atama yapar. Asıl kural backend'de; burada sadece arayüz uyarlanır.
-export default function WorkItemDialog({ itemKey, project, onClose }: {
-  itemKey: string | null; project: ProjectDetail; onClose: () => void;
+export default function WorkItemDialog({ itemKey, project, onClose, onOpenItem }: {
+  itemKey: string | null; project: ProjectDetail; onClose: () => void; onOpenItem?: (key: string) => void;
 }) {
   const qc = useQueryClient();
   const [comment, setComment] = useState("");
@@ -51,6 +53,7 @@ export default function WorkItemDialog({ itemKey, project, onClose }: {
   }, [item?.id]); // eslint-disable-line
 
   const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["labels", project.key] });
     qc.invalidateQueries({ queryKey: ["item", itemKey] });
     qc.invalidateQueries({ queryKey: ["activity", itemKey] });
     qc.invalidateQueries({ queryKey: ["sprints", project.key] });
@@ -119,18 +122,11 @@ export default function WorkItemDialog({ itemKey, project, onClose }: {
                 </>
               )}
 
-              {detail.data!.children.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Alt öğeler</Typography>
-                  {detail.data!.children.map((c) => (
-                    <Stack key={c.id} direction="row" spacing={1} sx={{ alignItems: "center", py: 0.5 }}>
-                      <TypeIcon type={c.type} /><Typography variant="body2" color="primary">{c.key}</Typography>
-                      <Typography variant="body2" sx={{ flex: 1 }}>{c.title}</Typography>
-                      <StatusChip status={c.status} />
-                    </Stack>
-                  ))}
-                </Box>
-              )}
+              <SubtasksSection itemKey={item.key} children={detail.data!.children} project={project}
+                canAdd={!!(perms?.canEdit || perms?.canAssign)} onOpenItem={onOpenItem} onChanged={refresh} />
+              <LinksSection itemKey={item.key} projectKey={project.key}
+                canEdit={!!(perms?.canEdit || perms?.canAssign)} onOpenItem={onOpenItem} />
+              <Attachments basePath={`/api/items/${item.key}`} />
 
               <Divider />
               <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 36 }}>
@@ -196,10 +192,30 @@ export default function WorkItemDialog({ itemKey, project, onClose }: {
                 <Box><Typography variant="caption" color="text.secondary">Öncelik</Typography><PriorityText p={item.priority} /></Box>
               )}
               <Box><Typography variant="caption" color="text.secondary">Raporlayan</Typography><Person name={item.reporterName} /></Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Bitiş tarihi</Typography>
-                <Typography variant="body2">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("tr-TR") : "—"}</Typography>
-              </Box>
+              {perms?.canEdit ? (
+                <LabelsField projectKey={project.key} value={item.labels ?? []}
+                  onChange={(labels) => save.mutate({ labels })} />
+              ) : (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Etiketler</Typography>
+                  {item.labels?.length ? <LabelChips labels={item.labels} max={10} /> : <Typography variant="body2">—</Typography>}
+                </Box>
+              )}
+              {perms?.canEdit ? (
+                <>
+                  <TextField type="date" size="small" label="Başlangıç tarihi" value={item.startDate?.slice(0, 10) ?? ""}
+                    onChange={(e) => e.target.value && save.mutate({ startDate: new Date(e.target.value).toISOString() })}
+                    slotProps={{ inputLabel: { shrink: true } }} />
+                  <TextField type="date" size="small" label="Bitiş tarihi" value={item.dueDate?.slice(0, 10) ?? ""}
+                    onChange={(e) => e.target.value && save.mutate({ dueDate: new Date(e.target.value).toISOString() })}
+                    slotProps={{ inputLabel: { shrink: true } }} />
+                </>
+              ) : (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Bitiş tarihi</Typography>
+                  <DueDate item={item} />
+                </Box>
+              )}
               {perms?.canEdit ? (
                 <TextField select size="small" label="Story point" value={item.storyPoints ?? ""}
                   onChange={(e) => save.mutate({ storyPoints: Number(e.target.value) })}>

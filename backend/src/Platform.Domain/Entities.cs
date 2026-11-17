@@ -55,8 +55,35 @@ public class User : ITenantEntity
     public Guid TenantId { get; set; }
     public string Email { get; set; } = "";
     public string FullName { get; set; } = "";
-    public string PasswordHash { get; set; } = "";
+    public string PasswordHash { get; set; } = "";   // davet edilip henüz şifre koymamışsa boş
     public string Role { get; set; } = Roles.Employee;
+    public bool IsActive { get; set; } = true;
+    public bool EmailConfirmed { get; set; }
+    public int FailedLoginCount { get; set; }
+    public DateTime? LockoutEnd { get; set; }
+    // Şifre değişince yenilenir; eski JWT'ler geçersiz olur
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LastLoginAt { get; set; }
+}
+
+public static class TokenPurposes
+{
+    public const string ResetPassword = "reset";
+    public const string Invite = "invite";
+    public const string VerifyEmail = "verify";
+}
+
+// Şifre sıfırlama / davet / e-posta doğrulama bağlantıları. Token'ın kendisi değil, SHA-256 özeti saklanır.
+public class AuthToken
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string Purpose { get; set; } = TokenPurposes.ResetPassword;
+    public string TokenHash { get; set; } = "";
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? UsedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class Project : ITenantEntity
@@ -92,7 +119,9 @@ public class WorkItem : ITenantEntity
     public string Priority { get; set; } = "Medium";
     public Guid? AssigneeId { get; set; }
     public Guid ReporterId { get; set; }
+    public DateTime? StartDate { get; set; }   // zaman çizelgesi için
     public DateTime? DueDate { get; set; }
+    public string[] Labels { get; set; } = Array.Empty<string>();
     public int? StoryPoints { get; set; }
     public Guid? SprintId { get; set; }      // null = backlog
     public int Rank { get; set; }            // backlog sırası
@@ -124,6 +153,105 @@ public class Ticket : ITenantEntity
     public string? ResolutionNote { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ResolvedAt { get; set; }
+    public Guid? WorkItemId { get; set; }   // göreve çevrildiyse
+    public Guid? IncidentId { get; set; }   // büyük bir olaya bağlandıysa
+
+    // ---- SLA ----
+    public DateTime? ResponseDueAt { get; set; }    // ilk yanıt için son an (mesai saatine göre)
+    public DateTime? ResolutionDueAt { get; set; }  // çözüm için son an
+    public DateTime? FirstResponseAt { get; set; }  // ilk kez atandığı / işleme alındığı an
+    public bool SlaWarned { get; set; }             // "süre dolmak üzere" bildirimi gönderildi
+    public bool SlaBreachNotified { get; set; }     // "süre aşıldı" bildirimi gönderildi
+
+    // ---- Memnuniyet anketi ----
+    public int? CsatRating { get; set; }            // 1-5
+    public string? CsatComment { get; set; }
+    public DateTime? CsatAt { get; set; }
+}
+
+// Ticket yazışması: destek ekibi ↔ çalışan. Internal = ekip içi not (çalışan görmez)
+public class TicketMessage : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid TicketId { get; set; }
+    public Guid AuthorId { get; set; }
+    public string Body { get; set; } = "";
+    public bool Internal { get; set; }
+    public bool AiAssisted { get; set; }   // yapay zekâ taslağından yazıldı (raporlama için)
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Denetim kaydı (KVKK / iç denetim): kim, neyi, ne zaman yaptı. İçerik değil, işlem kaydedilir.
+public class AuditLog : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid? UserId { get; set; }
+    public string UserName { get; set; } = "";   // o anki ad (kullanıcı silinse de kayıt okunur kalsın)
+    public string Action { get; set; } = "";     // "Ticket oluşturdu", "Giriş başarısız" …
+    public string Method { get; set; } = "";
+    public string Path { get; set; } = "";
+    public int StatusCode { get; set; }
+    public string? Ip { get; set; }
+    public DateTime At { get; set; } = DateTime.UtcNow;
+}
+
+// Önceliğe göre SLA hedefleri (mesai saati cinsinden)
+public class SlaPolicy : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string Priority { get; set; } = "Medium";
+    public double ResponseHours { get; set; }
+    public double ResolutionHours { get; set; }
+}
+
+// Firma ayarları: mesai saatleri ve tasarruf hesabı için maliyet varsayımları
+public class TenantSettings : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public int WorkStartHour { get; set; } = 9;
+    public int WorkEndHour { get; set; } = 18;
+    public string WorkDays { get; set; } = "1,2,3,4,5";   // 1=Pazartesi … 7=Pazar
+    public double UtcOffsetHours { get; set; } = 3;       // Türkiye
+    public double HourlyCost { get; set; } = 450;         // destek personelinin saatlik maliyeti (TL)
+    public double MinutesPerTicket { get; set; } = 35;    // bir ticket'ın ortalama destek emeği
+}
+
+public static class IncidentStatus
+{
+    public const string Active = "active";
+    public const string Resolved = "resolved";
+}
+
+// Büyük olay: aynı sorun için açılan çok sayıda ticket tek çatı altında toplanır
+public class Incident : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Severity { get; set; } = "High";
+    public string Status { get; set; } = IncidentStatus.Active;
+    public Guid CreatedById { get; set; }
+    public Guid? OwnerId { get; set; }
+    public string? ResolutionNote { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? ResolvedAt { get; set; }
+}
+
+// Asistana sorulan her soru: cevaplanamayanlar "bilgi boşluğu radarı"nı besler
+public class AssistantQuery : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid UserId { get; set; }
+    public string Question { get; set; } = "";
+    public bool Answered { get; set; }
+    public Guid? DraftArticleId { get; set; }  // bu soru için taslak yazıldıysa radar tekrar göstermesin
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class Article : ITenantEntity
@@ -134,6 +262,7 @@ public class Article : ITenantEntity
     public string Body { get; set; } = "";
     public string Category { get; set; } = "Diğer";
     public bool Published { get; set; } = true;
+    public Guid? SourceTicketId { get; set; }  // çözülen ticket'tan üretildiyse
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -144,6 +273,8 @@ public class KbFeedback : ITenantEntity
     public Guid UserId { get; set; }
     public Guid? ArticleId { get; set; }
     public bool Solved { get; set; }
+    public string Source { get; set; } = "article";   // article | wizard | assistant
+    public int? StepsTried { get; set; }               // sihirbazda kaç adım denendi
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -191,5 +322,51 @@ public class Notification : ITenantEntity
     public string Body { get; set; } = "";
     public string? Link { get; set; }            // frontend adresi, ör. /projects/ANK?item=ANK-3
     public bool IsRead { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public static class LinkTypes
+{
+    public const string Blocks = "blocks";       // kaynak, hedefi engeller
+    public const string Relates = "relates";     // ilişkili
+    public const string Duplicates = "duplicates"; // kaynak, hedefin kopyası
+    public static readonly string[] All = { Blocks, Relates, Duplicates };
+}
+
+public class WorkItemLink : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid SourceId { get; set; }
+    public Guid TargetId { get; set; }
+    public string Type { get; set; } = LinkTypes.Relates;
+    public Guid CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// "Bana atanan açık buglar" gibi kaydedilmiş liste/pano filtreleri
+public class SavedFilter : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid ProjectId { get; set; }
+    public Guid OwnerId { get; set; }
+    public string Name { get; set; } = "";
+    public string Query { get; set; } = "{}";   // filtre alanları (JSON)
+    public bool Shared { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class Attachment : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid? WorkItemId { get; set; }
+    public Guid? TicketId { get; set; }
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "application/octet-stream";
+    public long Size { get; set; }
+    public string StoredName { get; set; } = "";  // diskteki adı
+    public Guid UploadedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

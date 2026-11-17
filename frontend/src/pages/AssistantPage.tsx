@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Avatar, Box, Button, Card, Chip, CircularProgress, Stack, TextField, Typography } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import AiIcon from "@mui/icons-material/AutoAwesome";
+import { celebrate } from "../delight";
 import { api, errorMessage, type AskResponse } from "../api";
 
-interface Msg { role: "user" | "bot"; text: string; res?: AskResponse; question?: string }
+interface Msg { role: "user" | "bot"; text: string; res?: AskResponse; question?: string; rated?: "yes" | "no" }
 
 // RAG asistanı: firmanın bilgi bankasından kaynaklı cevap verir, alan dışı soruyu reddeder.
 export default function AssistantPage() {
@@ -57,6 +58,21 @@ export default function AssistantPage() {
                     <Typography variant="caption" color="text.secondary" sx={{ width: "100%" }}>Kaynaklar:</Typography>
                     {m.res.sources.map((s) => <Chip key={s.source_id} size="small" label={s.title} onClick={() => nav("/kb")} />)}
                   </Stack>
+                )}
+                {m.res?.answered && !m.rated && (
+                  <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: "center" }}>
+                    <Typography variant="caption" color="text.secondary">İşe yaradı mı?</Typography>
+                    <Button size="small" variant="outlined" color="success" onClick={() => {
+                      api.post("/api/kb/feedback", { articleId: m.res?.sources?.[0]?.source_id ?? null, solved: true, source: "assistant" }).catch(() => {});
+                      setMsgs((all) => all.map((x, j) => (j === i ? { ...x, rated: "yes" } : x)));
+                      celebrate();
+                    }}>👍 Çözüldü</Button>
+                    <Button size="small" onClick={() => { setMsgs((all) => all.map((x, j) => (j === i ? { ...x, rated: "no" } : x))); }}>👎 Olmadı</Button>
+                  </Stack>
+                )}
+                {m.rated === "yes" && <Typography variant="caption" color="success.main" sx={{ display: "block", mt: 1 }}>Harika, ticket açmanıza gerek kalmadı. 🎉</Typography>}
+                {m.rated === "no" && (
+                  <Button size="small" variant="outlined" sx={{ mt: 1 }} onClick={() => nav("/tickets/new")}>Ticket aç</Button>
                 )}
                 {m.res && !m.res.answered && (
                   <Button size="small" variant="outlined" sx={{ mt: 1 }} onClick={() => nav("/tickets/new")}>

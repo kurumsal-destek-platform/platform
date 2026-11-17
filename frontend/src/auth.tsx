@@ -5,7 +5,8 @@ import { api, tokenStore, type Me } from "./api";
 
 interface AuthCtx {
   user: Me | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
+  setSession: (token: string, user: Me, remember?: boolean) => void;
   logout: () => void;
 }
 
@@ -25,10 +26,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const r = await api.post<{ token: string; user: Me }>("/api/auth/login", { email, password });
-    tokenStore.set(r.data.token);
-    setUser(r.data.user);
+  const setSession = (token: string, u: Me, remember = true) => {
+    tokenStore.set(token, remember);
+    setUser(u);
+  };
+
+  const login = async (email: string, password: string, remember = false) => {
+    const r = await api.post<{ token: string; user: Me }>("/api/auth/login", { email, password, rememberMe: remember });
+    setSession(r.data.token, r.data.user, remember);
   };
 
   const logout = () => {
@@ -39,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   if (loading)
     return <Box sx={{ display: "grid", placeItems: "center", height: "100vh" }}><CircularProgress /></Box>;
 
-  return <Ctx.Provider value={{ user, login, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, login, setSession, logout }}>{children}</Ctx.Provider>;
 }
 
 export function RequireAuth({ children }: { children: ReactNode }) {
