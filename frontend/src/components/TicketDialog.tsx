@@ -9,6 +9,9 @@ import ArticleIcon from "@mui/icons-material/ArticleOutlined";
 import { api, errorMessage, PRIORITIES, TICKET_STATUSES, TYPES, type Project, type ProjectDetail, type Ticket } from "../api";
 import { useAuth } from "../auth";
 import Attachments from "./Attachments";
+import SmartAssign from "./SmartAssign";
+import TicketConversation from "./TicketConversation";
+import { CsatStars, SlaPanel } from "./SlaCsat";
 import { Person } from "./common";
 
 // Ticket detayı: açıklama, ekler, (yönetici için) göreve çevirme
@@ -17,6 +20,7 @@ export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | nul
   const nav = useNavigate();
   const isManager = user?.role === "Manager" || user?.role === "Admin";
   const [converting, setConverting] = useState(false);
+  const [assignedTo, setAssignedTo] = useState("");
   if (!ticket) return null;
   const workKey = ticket.workItemKey;
 
@@ -28,6 +32,9 @@ export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | nul
           <Chip size="small" label={ticket.category} />
           <Chip size="small" variant="outlined" label={TICKET_STATUSES[ticket.status] ?? ticket.status} />
           <Chip size="small" variant="outlined" label={PRIORITIES[ticket.priority] ?? ticket.priority} />
+          {ticket.incidentId && (
+            <Chip size="small" color="error" label="Büyük olaya bağlı" onClick={isManager ? () => { onClose(); nav("/incidents"); } : undefined} />
+          )}
           {workKey && (
             <Chip size="small" color="primary" label={`Görev: ${workKey}`}
               onClick={() => { onClose(); nav(`/projects/${workKey.split("-")[0]}?item=${workKey}`); }} />
@@ -38,14 +45,31 @@ export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | nul
         <Stack spacing={2}>
           <Stack direction="row" spacing={4}>
             <Box><Typography variant="caption" color="text.secondary">Açan</Typography><Person name={ticket.reporterName} /></Box>
-            <Box><Typography variant="caption" color="text.secondary">Atanan</Typography><Person name={ticket.assigneeName} /></Box>
+            <Box><Typography variant="caption" color="text.secondary">Atanan</Typography><Person name={assignedTo || ticket.assigneeName} /></Box>
             <Box>
               <Typography variant="caption" color="text.secondary">Açılış</Typography>
               <Typography variant="body2">{new Date(ticket.createdAt).toLocaleString("tr-TR")}</Typography>
             </Box>
           </Stack>
           <Typography sx={{ whiteSpace: "pre-wrap" }}>{ticket.description || "Açıklama yok."}</Typography>
+          <SlaPanel ticket={ticket} />
+          {ticket.csat && (
+            <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: "action.hover" }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                <Typography variant="subtitle2">Memnuniyet</Typography>
+                <CsatStars value={ticket.csat.rating} />
+              </Stack>
+              {ticket.csat.comment && <Typography variant="body2" sx={{ mt: 0.5 }}>"{ticket.csat.comment}"</Typography>}
+            </Box>
+          )}
+          {isManager && !ticket.incidentId && !["resolved", "closed"].includes(ticket.status) && (
+            <>
+              <Divider />
+              <SmartAssign ticket={ticket} onAssigned={setAssignedTo} />
+            </>
+          )}
           <Divider />
+          <TicketConversation ticket={ticket} isSupport={isManager || ticket.assigneeId === user?.id} />          <Divider />
           <Attachments basePath={`/api/tickets/${ticket.id}`} />
           <Divider />
           <ResolutionSection ticket={ticket} canResolve={isManager || ticket.assigneeId === user?.id} isManager={isManager} onClose={onClose} />

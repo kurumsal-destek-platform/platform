@@ -84,9 +84,11 @@ export function PasswordStrength({ password }: { password: string }) {
 
 // ---------- Giriş ----------
 const DEMO = [
-  { email: "yonetici@anka.com", label: "Anka yöneticisi" },
-  { email: "ayse@anka.com", label: "Ayşe" },
-  { email: "mehmet@anka.com", label: "Mehmet" },
+  { email: "yonetici@anka.com", label: "Zeynep · Anka yöneticisi" },
+  { email: "ali@anka.com", label: "Ali · IT (ağ)" },
+  { email: "ayse@anka.com", label: "Ayşe · IT (e-posta)" },
+  { email: "selin@anka.com", label: "Selin · çalışan" },
+  { email: "admin@anka.com", label: "Kerem · Admin" },
   { email: "yonetici@mavi.com", label: "Mavi yöneticisi" },
 ];
 

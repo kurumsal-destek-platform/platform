@@ -1,5 +1,6 @@
 using System.Text;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -9,7 +10,28 @@ using Platform.Application;
 using Platform.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "gelistirme-icin-en-az-32-karakterlik-gizli-anahtar-123";
+
+// Gizli anahtar: geliştirmede varsayılan kullanılabilir; canlı ortamda (Production) mutlaka .env'den gelmeli
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    if (!builder.Environment.IsDevelopment())
+        throw new InvalidOperationException("Jwt:Key tanımlı değil. .env dosyasında JWT_KEY (en az 32 karakter) belirleyin.");
+    jwtKey = "gelistirme-icin-en-az-32-karakterlik-gizli-anahtar-123";
+}
+if (jwtKey.Length < 32) throw new InvalidOperationException("Jwt:Key en az 32 karakter olmalı.");
+if (!builder.Environment.IsDevelopment() && jwtKey.StartsWith("gelistirme"))
+    throw new InvalidOperationException("Canlı ortamda geliştirme anahtarı kullanılamaz. .env dosyasında JWT_KEY belirleyin.");
+
+// Log: Logging__Json=true ise satır satır JSON (log toplama araçları için), değilse okunabilir metin
+if (builder.Configuration.GetValue<bool>("Logging:Json")) { builder.Logging.ClearProviders(); builder.Logging.AddJsonConsole(); }
+
+// Proxy/Docker arkasında gerçek istemci IP'si (hız sınırı ve denetim kaydı için)
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownNetworks.Clear(); o.KnownProxies.Clear();   // kendi ağımızdaki ters proxy'ye güveniyoruz
+});
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ITenantProvider, HttpTenantProvider>();
@@ -18,6 +40,10 @@ builder.Services.AddDbContext<AppDbContext>(o =>
 builder.Services.AddSingleton(new JwtSettings(jwtKey));
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddHttpClient();
+builder.Services.AddScoped<LocalLlm>();
+builder.Services.AddScoped<RagClient>();
+builder.Services.AddSignalR();
+builder.Services.AddHostedService<SlaMonitor>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -37,6 +63,15 @@ builder.Services
         // Şifre değişti, hesap kapatıldı ya da "tüm cihazlardan çıkış" yapıldıysa eski token'ları reddet
         o.Events = new JwtBearerEvents
         {
+            // Tarayıcı WebSocket'te başlık gönderemez; canlı bağlantı token'ı adre
+            // s satırında getirir
+            OnMessageReceived = ctx =>
+            {
+                var token = ctx.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                    ctx.Token = token;
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async ctx =>
             {
                 var sub = ctx.Principal?.FindFirst("sub")?.Value;
@@ -66,7 +101,7 @@ builder.Services.AddCors(o => o.AddPolicy("fe", p => p
     .WithOrigins("http://localhost:5173", "http://localhost:3000")
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(o => { o.Filters.Add<LiveBroadcastFilter>(); o.Filters.Add<AuditFilter>(); });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -95,11 +130,14 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    // Database__AutoMigrate=false ise migration'lar ayrı ve kontrollü bir adımda uygulanır (canlı ortam için önerilir)
+    if (app.Configuration.GetValue("Database:AutoMigrate", true)) db.Database.Migrate();
     Seeder.UpgradeLegacyUsers(db);
-    Seeder.Seed(db);
+    // Seed__Demo=false ise demo şirketleri yüklenmez (gerçek kurulum)
+    if (app.Configuration.GetValue("Seed:Demo", true)) Seeder.Seed(db);
 }
 
+app.UseForwardedHeaders();
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseCors("fe");
@@ -107,6 +145,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<LiveHub>("/hubs/live");
 app.MapHealthChecks("/health");
 
 app.Run();

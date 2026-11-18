@@ -4,6 +4,11 @@ import Layout from "./components/Layout";
 import { ForgotPasswordPage, LoginPage, RegisterPage, SetPasswordPage, VerifyEmailPage } from "./pages/AuthPages";
 import ProfilePage from "./pages/ProfilePage";
 import UsersPage from "./pages/UsersPage";
+import IncidentsPage from "./pages/IncidentsPage";
+import KnowledgeGapsPage from "./pages/KnowledgeGapsPage";
+import PerformancePage from "./pages/PerformancePage";
+import SettingsPage from "./pages/SettingsPage";
+import SystemPage from "./pages/SystemPage";
 import HomePage from "./pages/HomePage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectPage from "./pages/ProjectPage";
@@ -33,6 +38,11 @@ export default function App() {
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/users" element={<UsersPage />} />
+        <Route path="/incidents" element={<IncidentsPage />} />
+        <Route path="/insights/gaps" element={<KnowledgeGapsPage />} />
+        <Route path="/performance" element={<PerformancePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/system" element={<SystemPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

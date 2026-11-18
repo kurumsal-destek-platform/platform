@@ -32,6 +32,12 @@ public class AppDbContext : DbContext
     public DbSet<SavedFilter> SavedFilters => Set<SavedFilter>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<AuthToken> AuthTokens => Set<AuthToken>();
+    public DbSet<Incident> Incidents => Set<Incident>();
+    public DbSet<AssistantQuery> AssistantQueries => Set<AssistantQuery>();
+    public DbSet<SlaPolicy> SlaPolicies => Set<SlaPolicy>();
+    public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -55,6 +61,14 @@ public class AppDbContext : DbContext
         b.Entity<WorkItemLink>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<SavedFilter>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<Attachment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<Incident>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<AssistantQuery>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<SlaPolicy>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<TicketMessage>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<TicketMessage>().HasIndex(x => x.TicketId);
+        b.Entity<AuditLog>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<AuditLog>().HasIndex(x => new { x.TenantId, x.At });
+        b.Entity<TenantSettings>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<WorkItemLink>().HasIndex(x => x.SourceId);
         b.Entity<AuthToken>().HasIndex(x => x.TokenHash).IsUnique();
         b.Entity<WorkItemLink>().HasIndex(x => x.TargetId);

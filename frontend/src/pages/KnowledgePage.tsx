@@ -5,6 +5,8 @@ import {
   Alert, Box, Button, Card, CardActionArea, CardContent, Chip, FormControlLabel, MenuItem, Stack, Switch, TextField, Typography,
 } from "@mui/material";
 import { useAuth } from "../auth";
+import ImportDialog from "../components/ImportDialog";
+import UploadIcon from "@mui/icons-material/UploadFileOutlined";
 import { api, CATEGORIES, errorMessage, type Article, type ArticleLite } from "../api";
 
 export default function KnowledgePage() {
@@ -14,7 +16,10 @@ export default function KnowledgePage() {
   const [q, setQ] = useState("");
   const [drafts, setDrafts] = useState(isManager);
   const selected = params.get("article");
+  const [importOpen, setImportOpen] = useState(false);
+  const [imported, setImported] = useState<{ n: number; published: boolean } | null>(null);
   const select = (id: string) => setParams({ article: id }, { replace: true });
+  useEffect(() => { if (selected) setDrafts((d) => d || isManager); }, [selected, isManager]);
 
   const list = useQuery({
     queryKey: ["articles", q, drafts],
@@ -29,7 +34,16 @@ export default function KnowledgePage() {
         {isManager && (
           <FormControlLabel control={<Switch checked={drafts} onChange={(e) => setDrafts(e.target.checked)} />} label="Taslakları göster" />
         )}
+        <Box sx={{ flex: 1 }} />
+        {isManager && <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => setImportOpen(true)}>Doküman içe aktar</Button>}
       </Stack>
+      {imported && (
+        <Alert severity="success" onClose={() => setImported(null)} sx={{ mb: 2 }}>
+          {imported.n} makale {imported.published ? "yayınlandı. Asistan birkaç saniye içinde bu bilgilerle cevap vermeye başlar." : "taslak olarak eklendi. \"Taslakları göster\" ile inceleyip yayınlayabilirsiniz."}
+        </Alert>
+      )}
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)}
+        onDone={(n, published) => { setImportOpen(false); setImported({ n, published }); if (!published) setDrafts(true); }} />
       <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ alignItems: "flex-start" }}>
         <Stack spacing={1} sx={{ width: { md: 380 } }}>
           {list.data?.length === 0 && <Typography color="text.secondary">Makale bulunamadı.</Typography>}
@@ -49,7 +63,16 @@ export default function KnowledgePage() {
             </Card>
           ))}
         </Stack>
-        {selected && <ArticleView id={selected} canEdit={isManager} />}
+        {selected && (
+          <Box sx={{ flex: 1, width: "100%" }}>
+            {params.get("ai") === "1" && (
+              <Alert severity="info" sx={{ mb: 1 }}>
+                Bu taslağı yerel yapay zekâ, ekibin geçmiş çözümlerinden yazdı. Kontrol edip "Yayınla" dediğinizde çalışanlar ve asistan kullanmaya başlar.
+              </Alert>
+            )}
+            <ArticleView id={selected} canEdit={isManager} />
+          </Box>
+        )}
       </Stack>
     </Box>
   );

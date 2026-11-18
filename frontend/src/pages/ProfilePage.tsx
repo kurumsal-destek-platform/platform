@@ -6,6 +6,8 @@ import { useAuth } from "../auth";
 import { api, errorMessage, type Me } from "../api";
 import { initials } from "../components/Layout";
 import { PasswordField, PasswordStrength, passwordOk } from "./AuthPages";
+import { MyBadges } from "../components/Badges";
+import { resetTour } from "../components/WelcomeTour";
 
 const ROLE_TR: Record<string, string> = { Employee: "Çalışan", Manager: "Yönetici", Admin: "Admin" };
 
@@ -61,6 +63,8 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
+      <Box sx={{ mb: 2 }}><MyBadges userId={user?.id} /></Box>
+
       <Card variant="outlined" sx={{ mb: 2 }}>
         <CardContent>
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>Şifre değiştir</Typography>
@@ -83,7 +87,10 @@ export default function ProfilePage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Hesabınızın başka bir cihazda açık kaldığını düşünüyorsanız tüm oturumları kapatın.
           </Typography>
-          <Button color="error" variant="outlined" onClick={logoutAll}>Tüm cihazlardan çıkış yap</Button>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1 }}>
+            <Button color="error" variant="outlined" onClick={logoutAll}>Tüm cihazlardan çıkış yap</Button>
+            <Button onClick={() => { if (user) { resetTour(user.id); window.location.reload(); } }}>Tanıtım turunu tekrar göster</Button>
+          </Stack>
         </CardContent>
       </Card>
     </Box>

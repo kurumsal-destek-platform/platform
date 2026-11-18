@@ -12,6 +12,7 @@ import {
   api, errorMessage, isOverdue, PRIORITIES, STATUSES, TYPES, type ProjectDetail, type Sprint, type WorkItem,
 } from "../api";
 import TimelineView from "../components/TimelineView";
+import SprintRisk from "../components/SprintRisk";
 import BacklogView from "../components/BacklogView";
 import { useAuth } from "../auth";
 import { DueDate, LabelChips, Person, PriorityText, StatusChip, TypeIcon } from "../components/common";
@@ -108,6 +109,8 @@ export default function ProjectPage() {
         sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}>
         <Tab label="Backlog" /><Tab label="Pano" /><Tab label="Liste" /><Tab label="Zaman çizelgesi" /><Tab label="Üyeler" />
       </Tabs>
+
+      {(tab === 0 || tab === 1) && active && <SprintRisk sprintId={active.id} onOpen={setOpen} />}
 
       {tab === 3 && <TimelineView items={items.data ?? []} onOpen={setOpen} />}
 

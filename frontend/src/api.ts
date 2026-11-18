@@ -126,13 +126,92 @@ export interface CommentT { id: string; body: string; createdAt: string; authorI
 export interface Ticket {
   id: string; title: string; description: string; category: string; priority: string; status: string;
   createdAt: string; reporterId: string; reporterName?: string; assigneeId?: string | null; assigneeName?: string | null;
-  workItemId?: string | null; workItemKey?: string | null; resolutionNote?: string | null;
+  workItemId?: string | null; workItemKey?: string | null; resolutionNote?: string | null; incidentId?: string | null;
+  resolvedAt?: string | null;
+  sla?: SlaInfo;
+  csat?: { rating: number; comment?: string | null; at: string } | null;
 }
+export type SlaState = "met" | "breached" | "running" | "at_risk" | "none";
+export interface SlaInfo {
+  responseDueAt?: string | null; resolutionDueAt?: string | null; firstResponseAt?: string | null;
+  response: SlaState; resolution: SlaState;
+}
+export interface QualityT {
+  days: number;
+  sla: {
+    responsePct: number; resolutionPct: number; openBreached: number; openAtRisk: number;
+    byPriority: { priority: string; total: number; pct: number }[];
+    watch: { id: string; title: string; priority: string; status: string; createdAt: string; resolutionDueAt: string; responseDueAt: string;
+      assigneeName?: string | null; response: SlaState; resolution: SlaState }[];
+  };
+  csat: {
+    average: number; count: number; responseRate: number;
+    distribution: { rating: number; count: number }[];
+    comments: { title: string; rating: number; comment: string; csatAt: string; reporterName?: string; assigneeName?: string | null }[];
+  };
+  trend: { week: string; slaPct: number | null; csat: number | null }[];
+  agents: { name?: string; resolved: number; slaPct: number; csat: number | null; medianHours: number }[];
+}
+export interface SavingsT {
+  days: number;
+  assumptions: { minutesPerTicket: number; hourlyCost: number; medianWaitHours: number };
+  deflected: number; bySource: { wizard: number; article: number; assistant: number };
+  ticketsCreated: number; deflectionRate: number; supportHoursSaved: number; moneySaved: number; employeeHoursSaved: number;
+  assistantAnswered: number;
+  wizard: { solved: number; escalated: number; avgSteps: number };
+  weekly: { week: string; deflected: number; tickets: number }[];
+  topArticles: { id: string; title: string; solved: number }[];
+}
+export interface SettingsT {
+  workStartHour: number; workEndHour: number; workDays: number[]; hourlyCost: number; minutesPerTicket: number;
+  policies: { priority: string; responseHours: number; resolutionHours: number }[];
+}
+
 export interface ArticleLite { id: string; title: string; category: string; snippet: string; published?: boolean; fromTicket?: boolean }
 export interface Article { id: string; title: string; body: string; category: string; published?: boolean }
 export interface AskResponse {
   answered: boolean; answer?: string; message?: string; reason?: string;
   sources?: { source_id: string; title: string }[];
+}
+
+// ---- Akıllı özellikler ----
+export interface IncidentT {
+  id: string; title: string; description: string; severity: string; status: "active" | "resolved";
+  resolutionNote?: string | null; createdAt: string; resolvedAt?: string | null;
+  ownerId?: string | null; ownerName?: string | null; createdByName?: string | null;
+  ticketCount: number; openCount: number; affectedUsers: number;
+  tickets: { id: string; title: string; status: string; createdAt: string; reporterName?: string }[];
+}
+export interface IncidentSuggestion {
+  title: string; category: string; count: number; affectedUsers: number; firstAt: string; perHour: number;
+  ticketIds: string[]; tickets: { id: string; title: string; createdAt: string; reporterName?: string }[];
+}
+export interface IncidentMatch {
+  incident: { id: string; title: string; description: string; createdAt: string; affected: number; score: number } | null;
+  similarOpen: number;
+}
+export interface AssignSuggestion {
+  userId: string; fullName: string; role: string; load: number; similarCount: number; avgHours: number | null;
+  reasons: string[]; examples: { id: string; title: string; sim: number }[]; match: number; best: boolean;
+}
+export interface KnowledgeGap {
+  topic: string; questionCount: number; ticketCount: number; affectedUsers: number; lastAt: string; score: number;
+  supportHours: number; hasKnownFix: boolean; questionIds: string[]; ticketIds: string[];
+  samples: { kind: "question" | "ticket"; id: string; text: string; userName?: string; at: string; resolution?: string | null }[];
+}
+export interface KnowledgeGapsResponse {
+  mode: "semantic" | "keyword";
+  stats: { totalQuestions: number; unanswered: number; answerRate: number };
+  gaps: KnowledgeGap[];
+}
+export interface SprintRiskT {
+  available: boolean; message?: string;
+  sprint?: { id: string; name: string; startDate: string; endDate: string; projectKey: string };
+  unit: string; total: number; done: number; projected: number; completion: number; timePct: number; workPct: number;
+  daysLeft: number; ratePerDay: number; usedHistory: number; level: "low" | "medium" | "high";
+  risks: { key: string; title: string; status: string; points?: number | null; assigneeName?: string | null; reasons: string[]; severity: "high" | "medium" }[];
+  recommendations: string[];
+  burndown: { date: string; ideal: number; actual: number | null; forecast: number | null }[];
 }
 
 export const STATUSES: { key: string; label: string }[] = [
@@ -165,6 +244,15 @@ export function describeActivity(a: Activity): string {
     default: return a.action;
   }
 }
+
+// "2 sa 15 dk" gibi kısa süre
+export function formatDuration(minutes: number): string {
+  const m = Math.abs(Math.round(minutes));
+  if (m < 60) return `${m} dk`;
+  if (m < 60 * 24) return `${Math.floor(m / 60)} sa${m % 60 ? ` ${m % 60} dk` : ""}`;
+  return `${Math.floor(m / 1440)} gün${Math.floor((m % 1440) / 60) ? ` ${Math.floor((m % 1440) / 60)} sa` : ""}`;
+}
+export const formatTL = (n: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(n);
 
 export function timeAgo(iso: string): string {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;

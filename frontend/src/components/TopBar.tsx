@@ -7,14 +7,42 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import BellIcon from "@mui/icons-material/NotificationsNoneOutlined";
+import MenuIcon from "@mui/icons-material/Menu";
+import DarkIcon from "@mui/icons-material/DarkModeOutlined";
+import LightIcon from "@mui/icons-material/LightModeOutlined";
+import { useThemeMode } from "../theme";
+import { shortcutLabel } from "./CommandPalette";
+import type { LiveState } from "../live";
 import { api, statusLabel, timeAgo, type NotificationT, type SearchResult } from "../api";
 import { TypeIcon } from "./common";
 
-export default function TopBar() {
+export default function TopBar({ onMenu, onPalette, live }: { onMenu?: () => void; onPalette: () => void; live: LiveState }) {
+  const { resolved, toggle } = useThemeMode();
   return (
-    <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 3 }}>
-      <GlobalSearch />
-      <Box sx={{ flex: 1 }} />
+    <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 3 }}>
+      {onMenu && <IconButton onClick={onMenu} aria-label="Menüyü aç" edge="start"><MenuIcon /></IconButton>}
+      {onMenu ? (
+        <Button variant="outlined" color="inherit" onClick={onPalette} startIcon={<SearchIcon />}
+          sx={{ flex: 1, justifyContent: "flex-start", color: "text.secondary", borderColor: "divider" }}>Ara…</Button>
+      ) : (
+        <>
+          <GlobalSearch />
+          <Tooltip title="Komut paleti: sayfalar, işlemler, arama">
+            <Button size="small" variant="outlined" color="inherit" onClick={onPalette} sx={{ color: "text.secondary", borderColor: "divider", whiteSpace: "nowrap" }}>
+              {shortcutLabel}
+            </Button>
+          </Tooltip>
+          <Box sx={{ flex: 1 }} />
+        </>
+      )}
+      <Tooltip title={live === "live" ? "Canlı: değişiklikler anında görünür" : live === "connecting" ? "Canlı bağlantı kuruluyor…" : "Canlı bağlantı yok; sayfa yenilenince güncellenir"}>
+        <Box sx={{ width: 10, height: 10, borderRadius: "50%", mx: 0.5, flexShrink: 0,
+          bgcolor: live === "live" ? "success.main" : live === "connecting" ? "warning.main" : "text.disabled",
+          boxShadow: live === "live" ? (t) => `0 0 0 3px ${t.palette.success.main}33` : "none" }} />
+      </Tooltip>
+      <Tooltip title={resolved === "dark" ? "Aydınlık tema" : "Karanlık tema"}>
+        <IconButton onClick={toggle} aria-label="Temayı değiştir">{resolved === "dark" ? <LightIcon /> : <DarkIcon />}</IconButton>
+      </Tooltip>
       <NotificationBell />
     </Stack>
   );

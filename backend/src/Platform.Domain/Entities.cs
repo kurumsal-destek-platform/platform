@@ -154,6 +154,104 @@ public class Ticket : ITenantEntity
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ResolvedAt { get; set; }
     public Guid? WorkItemId { get; set; }   // göreve çevrildiyse
+    public Guid? IncidentId { get; set; }   // büyük bir olaya bağlandıysa
+
+    // ---- SLA ----
+    public DateTime? ResponseDueAt { get; set; }    // ilk yanıt için son an (mesai saatine göre)
+    public DateTime? ResolutionDueAt { get; set; }  // çözüm için son an
+    public DateTime? FirstResponseAt { get; set; }  // ilk kez atandığı / işleme alındığı an
+    public bool SlaWarned { get; set; }             // "süre dolmak üzere" bildirimi gönderildi
+    public bool SlaBreachNotified { get; set; }     // "süre aşıldı" bildirimi gönderildi
+
+    // ---- Memnuniyet anketi ----
+    public int? CsatRating { get; set; }            // 1-5
+    public string? CsatComment { get; set; }
+    public DateTime? CsatAt { get; set; }
+}
+
+// Ticket yazışması: destek ekibi ↔ çalışan. Internal = ekip içi not (çalışan görmez)
+public class TicketMessage : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid TicketId { get; set; }
+    public Guid AuthorId { get; set; }
+    public string Body { get; set; } = "";
+    public bool Internal { get; set; }
+    public bool AiAssisted { get; set; }   // yapay zekâ taslağından yazıldı (raporlama için)
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Denetim kaydı (KVKK / iç denetim): kim, neyi, ne zaman yaptı. İçerik değil, işlem kaydedilir.
+public class AuditLog : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid? UserId { get; set; }
+    public string UserName { get; set; } = "";   // o anki ad (kullanıcı silinse de kayıt okunur kalsın)
+    public string Action { get; set; } = "";     // "Ticket oluşturdu", "Giriş başarısız" …
+    public string Method { get; set; } = "";
+    public string Path { get; set; } = "";
+    public int StatusCode { get; set; }
+    public string? Ip { get; set; }
+    public DateTime At { get; set; } = DateTime.UtcNow;
+}
+
+// Önceliğe göre SLA hedefleri (mesai saati cinsinden)
+public class SlaPolicy : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string Priority { get; set; } = "Medium";
+    public double ResponseHours { get; set; }
+    public double ResolutionHours { get; set; }
+}
+
+// Firma ayarları: mesai saatleri ve tasarruf hesabı için maliyet varsayımları
+public class TenantSettings : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public int WorkStartHour { get; set; } = 9;
+    public int WorkEndHour { get; set; } = 18;
+    public string WorkDays { get; set; } = "1,2,3,4,5";   // 1=Pazartesi … 7=Pazar
+    public double UtcOffsetHours { get; set; } = 3;       // Türkiye
+    public double HourlyCost { get; set; } = 450;         // destek personelinin saatlik maliyeti (TL)
+    public double MinutesPerTicket { get; set; } = 35;    // bir ticket'ın ortalama destek emeği
+}
+
+public static class IncidentStatus
+{
+    public const string Active = "active";
+    public const string Resolved = "resolved";
+}
+
+// Büyük olay: aynı sorun için açılan çok sayıda ticket tek çatı altında toplanır
+public class Incident : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Severity { get; set; } = "High";
+    public string Status { get; set; } = IncidentStatus.Active;
+    public Guid CreatedById { get; set; }
+    public Guid? OwnerId { get; set; }
+    public string? ResolutionNote { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? ResolvedAt { get; set; }
+}
+
+// Asistana sorulan her soru: cevaplanamayanlar "bilgi boşluğu radarı"nı besler
+public class AssistantQuery : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid UserId { get; set; }
+    public string Question { get; set; } = "";
+    public bool Answered { get; set; }
+    public Guid? DraftArticleId { get; set; }  // bu soru için taslak yazıldıysa radar tekrar göstermesin
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class Article : ITenantEntity
@@ -175,6 +273,8 @@ public class KbFeedback : ITenantEntity
     public Guid UserId { get; set; }
     public Guid? ArticleId { get; set; }
     public bool Solved { get; set; }
+    public string Source { get; set; } = "article";   // article | wizard | assistant
+    public int? StepsTried { get; set; }               // sihirbazda kaç adım denendi
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
