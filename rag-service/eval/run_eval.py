@@ -10,6 +10,7 @@ RAG doğrulama testi.  Çalıştırma (proje klasöründe):
   - Eşik kalibrasyonu: hangi güven eşiğinde en yüksek doğruluk elde ediliyor
 Sorular asistan üzerinden değil doğrudan RAG'e sorulur; bilgi boşluğu radarı kirlenmez.
 """
+
 import argparse
 import json
 import os
@@ -18,15 +19,17 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import main  # noqa: E402
-from retrieval import fuse  # noqa: E402
+import main
+from retrieval import fuse
 
 HERE = os.path.dirname(__file__)
 
 
 def tenant_id(name: str) -> str:
     with main.db() as c:
-        row = c.execute('SELECT "Id"::text FROM "Tenants" WHERE "Name" = %s', (name,)).fetchone()
+        row = c.execute(
+            'SELECT "Id"::text FROM "Tenants" WHERE "Name" = %s', (name,)
+        ).fetchone()
     if not row:
         sys.exit(f"'{name}' firması veritabanında yok. Demo verisi yüklendi mi?")
     return row[0]
@@ -46,22 +49,42 @@ def run(tenant: str, questions: list[dict], use_llm: bool) -> dict:
             verdict = "doğru red" if ok else "UYDURMA RİSKİ"
         else:
             ok = res["answered"] and expect in titles
-            verdict = ("doğru (1.)" if titles[:1] == [expect] else "doğru (ilk 3)") if ok else \
-                ("GEREKSİZ RED" if not res["answered"] else "YANLIŞ KAYNAK")
-        rows.append(dict(q=q, expect=expect, got=titles[:1], answered=res["answered"], ok=ok, verdict=verdict,
-                         ms=round(ms), mode=res.get("mode"), score=res.get("best_score")))
+            verdict = (
+                ("doğru (1.)" if titles[:1] == [expect] else "doğru (ilk 3)")
+                if ok
+                else ("GEREKSİZ RED" if not res["answered"] else "YANLIŞ KAYNAK")
+            )
+        rows.append(
+            {
+                "q": q,
+                "expect": expect,
+                "got": titles[:1],
+                "answered": res["answered"],
+                "ok": ok,
+                "verdict": verdict,
+                "ms": round(ms),
+                "mode": res.get("mode"),
+                "score": res.get("best_score"),
+            }
+        )
 
         # Eşik taraması için ham puanları sakla (güvenlik filtresine takılanlar hariç)
         if not main.INJECTION.search(q):
             st = main.state(tenant)
-            raw.append(dict(expect=expect, vec=main.vector_scores(tenant, q), kw=st.kw.search(q) if st.kw else {}))
-    return dict(rows=rows, raw=raw)
+            raw.append(
+                {
+                    "expect": expect,
+                    "vec": main.vector_scores(tenant, q),
+                    "kw": st.kw.search(q) if st.kw else {},
+                }
+            )
+    return {"rows": rows, "raw": raw}
 
 
 def sweep(tenant: str, raw: list[dict]) -> list[tuple[float, float]]:
     meta = main.state(tenant).meta
     out = []
-    for i in range(0, 13):
+    for i in range(13):
         th = round(0.35 + i * 0.025, 3)
         good = 0
         for r in raw:
@@ -85,15 +108,22 @@ def report(res: dict, tenant: str, use_llm: bool):
     halluc = sum(r["verdict"] == "UYDURMA RİSKİ" for r in oos)
     mode = rows[0]["mode"] if rows else "?"
     sw = sweep(tenant, res["raw"]) if res["raw"] else []
-    best = max(sw, key=lambda x: (x[1], -abs(x[0] - main.SCORE_THRESHOLD))) if sw else None
+    best = (
+        max(sw, key=lambda x: (x[1], -abs(x[0] - main.SCORE_THRESHOLD))) if sw else None
+    )
 
     lines = [
-        "# RAG doğrulama raporu", "",
+        "# RAG doğrulama raporu",
+        "",
         f"- Tarih: {time.strftime('%Y-%m-%d %H:%M')}",
-        f"- Arama modu: **{'hibrit (anlam + kelime)' if mode == 'hybrid' else 'sadece kelime (Ollama kapalı)'}**"
-        f" · LLM: {'açık' if use_llm else 'kapalı (sadece arama ve karar ölçüldü)'}",
-        f"- Modeller: {main.EMBED_MODEL} / {main.LLM_MODEL} · güven eşiği: {main.SCORE_THRESHOLD}", "",
-        "| Ölçüt | Sonuç |", "|---|---|",
+        (
+            f"- Arama modu: **{'hibrit (anlam + kelime)' if mode == 'hybrid' else 'sadece kelime (Ollama kapalı)'}**"
+            f" · LLM: {'açık' if use_llm else 'kapalı (sadece arama ve karar ölçüldü)'}"
+        ),
+        f"- Modeller: {main.EMBED_MODEL} / {main.LLM_MODEL} · güven eşiği: {main.SCORE_THRESHOLD}",
+        "",
+        "| Ölçüt | Sonuç |",
+        "|---|---|",
         f"| Doğru makaleyi **ilk sırada** buldu | **%{round(100 * top1 / len(ins))}** ({top1}/{len(ins)}) |",
         f"| Doğru makale **ilk 3** içinde | **%{round(100 * top3 / len(ins))}** ({top3}/{len(ins)}) |",
         f"| Kapsam dışı / güvenlik / başka firma sorusunu **doğru reddetti** | **%{round(100 * rej / len(oos))}** ({rej}/{len(oos)}) |",
@@ -102,14 +132,22 @@ def report(res: dict, tenant: str, use_llm: bool):
         "",
     ]
     if best:
-        lines += ["## Eşik kalibrasyonu", "",
-                  "| Eşik | Genel doğruluk |", "|---|---|"]
-        lines += [f"| {th}{' ← şu an' if abs(th - main.SCORE_THRESHOLD) < 0.001 else ''}{' ← en iyi' if (th, a) == best else ''} | %{round(100 * a)} |" for th, a in sw]
-        lines += ["", f"Önerilen eşik: **{best[0]}** (docker-compose.yml → rag → SCORE_THRESHOLD)", ""]
+        lines += ["## Eşik kalibrasyonu", "", "| Eşik | Genel doğruluk |", "|---|---|"]
+        lines += [
+            f"| {th}{' ← şu an' if abs(th - main.SCORE_THRESHOLD) < 0.001 else ''}{' ← en iyi' if (th, a) == best else ''} | %{round(100 * a)} |"
+            for th, a in sw
+        ]
+        lines += [
+            "",
+            f"Önerilen eşik: **{best[0]}** (docker-compose.yml → rag → SCORE_THRESHOLD)",
+            "",
+        ]
     lines += ["## Hatalı sonuçlar", ""]
     bad = [r for r in rows if not r["ok"]]
-    lines += [f"- {r['verdict']}: \"{r['q']}\" → beklenen: {r['expect'] or 'bilgim yok'}, gelen: {r['got'] or 'bilgim yok'} (puan {r['score']})"
-              for r in bad] or ["- Yok 🎉"]
+    lines += [
+        f'- {r["verdict"]}: "{r["q"]}" → beklenen: {r["expect"] or "bilgim yok"}, gelen: {r["got"] or "bilgim yok"} (puan {r["score"]})'
+        for r in bad
+    ] or ["- Yok 🎉"]
 
     text = "\n".join(lines)
     print("\n" + text)
@@ -117,14 +155,17 @@ def report(res: dict, tenant: str, use_llm: bool):
         f.write(text + "\n")
     with open(os.path.join(HERE, "rapor.json"), "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=1)
-    print(f"\nRapor kaydedildi: eval/rapor.md")
+    print("\nRapor kaydedildi: eval/rapor.md")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--tenant", default="Anka Lojistik")
-    ap.add_argument("--llm", action="store_true", help="LLM cevaplarını da üret (yavaş)")
+    ap.add_argument(
+        "--llm", action="store_true", help="LLM cevaplarını da üret (yavaş)"
+    )
     a = ap.parse_args()
-    qs = json.load(open(os.path.join(HERE, "questions.json"), encoding="utf-8"))
+    with open(os.path.join(HERE, "questions.json"), encoding="utf-8") as f:
+        qs = json.load(f)
     tid = tenant_id(a.tenant)
     report(run(tid, qs, a.llm), tid, a.llm)

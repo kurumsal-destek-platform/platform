@@ -9,13 +9,19 @@ def _docx() -> bytes:
     docx = pytest.importorskip("docx")
     d = docx.Document()
     d.add_heading("IT El Kitabı", 0)
-    d.add_paragraph("Bu el kitabı çalışanların sık karşılaştığı sorunlar için hazırlanmıştır.")
+    d.add_paragraph(
+        "Bu el kitabı çalışanların sık karşılaştığı sorunlar için hazırlanmıştır."
+    )
     d.add_heading("Toplantı odası rezervasyonu", 1)
     d.add_paragraph("Outlook'ta Yeni Toplantı'ya tıklayın.", style="List Number")
     d.add_paragraph("Oda Bul ile Kat3-Toplantı odasını seçin.", style="List Number")
     d.add_heading("Masraf formu", 1)
-    d.add_paragraph("Masraf formları ERP'deki Masraf modülünden doldurulur ve yöneticiye onaya gönderilir.")
-    b = io.BytesIO(); d.save(b); return b.getvalue()
+    d.add_paragraph(
+        "Masraf formları ERP'deki Masraf modülünden doldurulur ve yöneticiye onaya gönderilir."
+    )
+    b = io.BytesIO()
+    d.save(b)
+    return b.getvalue()
 
 
 def test_word_baslik_stillerine_gore_bolunur():
@@ -28,7 +34,10 @@ def test_word_baslik_stillerine_gore_bolunur():
 def test_markdown_ve_tek_kelimelik_baslik():
     md = "# Uzaktan destek\n\nIT ekibinin bağlanabilmesi için AnyDesk gerekir, Yazılım Merkezi'nden kurulur.\n\n## Güvenlik\n\nTanımadığınız kişilere asla AnyDesk numaranızı vermeyin, IT sizi önceden arar.\n"
     titles = [s["title"] for s in extract.extract("destek.md", md.encode())["sections"]]
-    assert titles == ["Uzaktan destek", "Uzaktan destek: Güvenlik"]   # Türkçe İ/ı doğru, tek kelime anlamlı hale gelir
+    assert titles == [
+        "Uzaktan destek",
+        "Uzaktan destek: Güvenlik",
+    ]  # Türkçe İ/ı doğru, tek kelime anlamlı hale gelir
 
 
 def test_html_buyuk_harf_turkce():

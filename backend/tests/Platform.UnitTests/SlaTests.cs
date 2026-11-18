@@ -13,12 +13,12 @@ public class SlaTests
 
     [Theory]
     // başlangıç (yerel)             saat   beklenen (yerel)
-    [InlineData("2026-11-13 17:00", 2, "2026-11-16 10:00")]   // Cuma 17:00 + 2 sa → Pazartesi 10:00
-    [InlineData("2026-11-14 11:00", 2, "2026-11-16 11:00")]   // Cumartesi → Pazartesi mesai başı
+    [InlineData("2026-11-13 17:00", 2.0, "2026-11-16 10:00")]   // Cuma 17:00 + 2 sa → Pazartesi 10:00
+    [InlineData("2026-11-14 11:00", 2.0, "2026-11-16 11:00")]   // Cumartesi → Pazartesi mesai başı
     [InlineData("2026-11-16 07:30", 0.5, "2026-11-16 09:30")] // mesai öncesi → 09:00'dan sayılır
-    [InlineData("2026-11-16 10:00", 24, "2026-11-18 16:00")]  // 24 sa = 2 gün 6 saat mesai
-    [InlineData("2026-11-16 18:00", 4, "2026-11-17 13:00")]   // mesai bitti → ertesi gün
-    [InlineData("2026-11-16 12:00", 3, "2026-11-16 15:00")]   // aynı gün içinde
+    [InlineData("2026-11-16 10:00", 24.0, "2026-11-18 16:00")]  // 24 sa = 2 gün 6 saat mesai
+    [InlineData("2026-11-16 18:00", 4.0, "2026-11-17 13:00")]   // mesai bitti → ertesi gün
+    [InlineData("2026-11-16 12:00", 3.0, "2026-11-16 15:00")]   // aynı gün içinde
     public void AddBusinessHours_mesai_saatine_gore_hesaplar(string start, double hours, string expected)
     {
         var s = DateTime.Parse(start); var e = DateTime.Parse(expected);

@@ -1,16 +1,20 @@
 """Doküman içe aktarma: PDF / Word / metin / HTML → başlıklara göre bölümler.
 Her bölüm bilgi bankasında ayrı bir makale olur (asistan kısa ve odaklı makalelerde daha iyi cevap verir).
 Tamamen yerel; dosya hiçbir dış servise gitmez."""
+
 import html
 import io
 import re
 
 MAX_SECTIONS = 60
-MIN_BODY = 40          # bundan kısa bölümler bir öncekine eklenir
-MAX_BODY = 6000        # çok uzun bölümler bölünür
+MIN_BODY = 40  # bundan kısa bölümler bir öncekine eklenir
+MAX_BODY = 6000  # çok uzun bölümler bölünür
 
 # "1.", "2.3", "1)", "BÖLÜM 2", tamamı büyük harf kısa satırlar … başlık gibi görünür
-HEADING_RE = re.compile(r"^((\d+(\.\d+){0,3}[.)]?)|(bölüm|kısım|madde|section|chapter)\s+\d+)\s+\S", re.IGNORECASE)
+HEADING_RE = re.compile(
+    r"^((\d+(\.\d+){0,3}[.)]?)|(bölüm|kısım|madde|section|chapter)\s+\d+)\s+\S",
+    re.IGNORECASE,
+)
 
 
 def tr_lower(s: str) -> str:
@@ -23,60 +27,75 @@ def tr_upper(s: str) -> str:
 
 def tr_capitalize(s: str) -> str:
     low = tr_lower(s)
-    return ({"i": "İ", "ı": "I"}.get(low[:1], low[:1].upper()) + low[1:]) if low else low
+    return (
+        ({"i": "İ", "ı": "I"}.get(low[:1], low[:1].upper()) + low[1:]) if low else low
+    )
 
 
 def _clean(s: str) -> str:
     s = s.replace("\r", "").replace("­", "").replace("\x0c", "\n")
     s = re.sub(r"[ \t]+", " ", s)
-    s = re.sub(r"(\w)-\n(\w)", r"\1\2", s)          # PDF'te satır sonu tirelemesi
+    s = re.sub(r"(\w)-\n(\w)", r"\1\2", s)  # PDF'te satır sonu tirelemesi
     return re.sub(r"\n{3,}", "\n\n", s).strip()
 
 
 def _looks_like_heading(line: str, next_line: str | None) -> bool:
     l = line.strip()
-    if not (3 <= len(l) <= 90) or l.endswith((".", ",", ";")) and not HEADING_RE.match(l):
+    if (
+        not (3 <= len(l) <= 90)
+        or l.endswith((".", ",", ";"))
+        and not HEADING_RE.match(l)
+    ):
         return False
     if HEADING_RE.match(l) and len(l) < 80:
         # "1) İnternetinizi kontrol edin." gibi madde adımlarını başlık sanma: başlıklar nokta ile bitmez, kısa olur
         return not l.endswith(".") and len(l.split()) <= 9
     letters = [c for c in l if c.isalpha()]
-    if letters and sum(c.isupper() for c in letters) / len(letters) > 0.8 and len(l.split()) <= 8:
-        return True
-    return False
+    return bool(
+        letters
+        and sum(c.isupper() for c in letters) / len(letters) > 0.8
+        and len(l.split()) <= 8
+    )
 
 
 def _split_text(text: str, fallback_title: str) -> list[dict]:
     lines = [l.rstrip() for l in _clean(text).split("\n")]
     sections, title, buf = [], None, []
     for i, line in enumerate(lines):
-        nxt = next((x for x in lines[i + 1:] if x.strip()), None)
+        nxt = next((x for x in lines[i + 1 :] if x.strip()), None)
         if line.strip() and _looks_like_heading(line, nxt):
             if buf and "".join(buf).strip():
-                sections.append({"title": title or fallback_title, "body": "\n".join(buf).strip()})
+                sections.append(
+                    {"title": title or fallback_title, "body": "\n".join(buf).strip()}
+                )
             title, buf = line.strip().rstrip(":"), []
         else:
             buf.append(line)
     if "".join(buf).strip():
-        sections.append({"title": title or fallback_title, "body": "\n".join(buf).strip()})
+        sections.append(
+            {"title": title or fallback_title, "body": "\n".join(buf).strip()}
+        )
     return sections
 
 
 def _from_docx(data: bytes, fallback: str) -> list[dict]:
     import docx  # python-docx
+
     d = docx.Document(io.BytesIO(data))
     sections, title, buf = [], None, []
     for p in d.paragraphs:
         t = p.text.strip()
         style = (p.style.name or "").lower() if p.style is not None else ""
-        if t and (style.startswith("heading") or style.startswith("başlık") or style == "title"):
+        if t and (style.startswith(("heading", "başlık")) or style == "title"):
             if buf:
-                sections.append({"title": title or fallback, "body": "\n".join(buf).strip()})
+                sections.append(
+                    {"title": title or fallback, "body": "\n".join(buf).strip()}
+                )
             title, buf = t, []
         elif t:
             numbered = p._p.pPr is not None and p._p.pPr.numPr is not None
             buf.append(f"- {t}" if numbered or "list" in style else t)
-    for table in d.tables:   # tablolar: satır satır "a | b | c"
+    for table in d.tables:  # tablolar: satır satır "a | b | c"
         rows = [" | ".join(c.text.strip() for c in r.cells) for r in table.rows]
         buf.append("\n".join(rows))
     if buf:
@@ -89,6 +108,7 @@ def _from_docx(data: bytes, fallback: str) -> list[dict]:
 
 def _from_pdf(data: bytes, fallback: str) -> tuple[list[dict], int]:
     from pypdf import PdfReader
+
     r = PdfReader(io.BytesIO(data))
     if r.is_encrypted:
         try:
@@ -104,7 +124,11 @@ def _from_pdf(data: bytes, fallback: str) -> tuple[list[dict], int]:
 def _from_html(data: bytes, fallback: str) -> list[dict]:
     s = data.decode("utf-8", errors="replace")
     s = re.sub(r"(?is)<(script|style).*?</\1>", "", s)
-    s = re.sub(r"(?i)<h[1-3][^>]*>(.*?)</h[1-3]>", lambda m: "\n\n" + tr_upper(re.sub("<[^>]+>", "", m.group(1)).strip()) + "\n", s)
+    s = re.sub(
+        r"(?i)<h[1-3][^>]*>(.*?)</h[1-3]>",
+        lambda m: "\n\n" + tr_upper(re.sub("<[^>]+>", "", m.group(1)).strip()) + "\n",
+        s,
+    )
     s = re.sub(r"(?i)<(br|/p|/li|/div|/tr)[^>]*>", "\n", s)
     s = re.sub(r"(?i)<li[^>]*>", "- ", s)
     return _split_text(html.unescape(re.sub("<[^>]+>", "", s)), fallback)
@@ -125,7 +149,7 @@ def _normalize(sections: list[dict]) -> list[dict]:
         if out and len(body) < MIN_BODY:
             out[-1]["body"] += f"\n\n{title}\n{body}".rstrip()
             continue
-        while len(body) > MAX_BODY:     # çok uzun: paragraf sınırından böl
+        while len(body) > MAX_BODY:  # çok uzun: paragraf sınırından böl
             cut = body.rfind("\n", 0, MAX_BODY)
             cut = cut if cut > MAX_BODY // 2 else MAX_BODY
             out.append({"title": title, "body": body[:cut].strip()})
@@ -137,7 +161,10 @@ def _normalize(sections: list[dict]) -> list[dict]:
 
 def extract(filename: str, data: bytes) -> dict:
     name = filename.rsplit("/", 1)[-1]
-    base = re.sub(r"\.[^.]+$", "", name).replace("_", " ").replace("-", " ").strip() or "Doküman"
+    base = (
+        re.sub(r"\.[^.]+$", "", name).replace("_", " ").replace("-", " ").strip()
+        or "Doküman"
+    )
     ext = name.lower().rsplit(".", 1)[-1] if "." in name else ""
     pages = None
     if ext == "pdf":
@@ -146,17 +173,25 @@ def extract(filename: str, data: bytes) -> dict:
         sections = _from_docx(data, base)
     elif ext in ("txt", "md", "markdown", "csv", "log"):
         text = data.decode("utf-8", errors="replace")
-        if ext in ("md", "markdown"):   # markdown başlıkları
+        if ext in ("md", "markdown"):  # markdown başlıkları
             text = re.sub(r"(?m)^#{1,3}\s+(.+)$", lambda m: tr_upper(m.group(1)), text)
         sections = _split_text(text, base)
     elif ext in ("html", "htm"):
         sections = _from_html(data, base)
     elif ext == "doc":
-        raise ValueError("Eski .doc biçimi desteklenmiyor; Word'de 'Farklı kaydet → .docx' yapın.")
+        raise ValueError(
+            "Eski .doc biçimi desteklenmiyor; Word'de 'Farklı kaydet → .docx' yapın."
+        )
     else:
-        raise ValueError(f"Desteklenmeyen dosya türü: .{ext or '?'} (PDF, DOCX, TXT, MD, HTML desteklenir)")
+        raise ValueError(
+            f"Desteklenmeyen dosya türü: .{ext or '?'} (PDF, DOCX, TXT, MD, HTML desteklenir)"
+        )
     sections = _normalize(sections)
     if not sections:
         raise ValueError("Dokümanda okunabilir metin bulunamadı.")
-    return {"file": name, "pages": pages, "sections": sections,
-            "characters": sum(len(s["body"]) for s in sections)}
+    return {
+        "file": name,
+        "pages": pages,
+        "sections": sections,
+        "characters": sum(len(s["body"]) for s in sections),
+    }

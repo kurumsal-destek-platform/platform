@@ -37,6 +37,7 @@ public static class Seeder
 
         foreach (var t in root["tenants"]!.AsArray())
         {
+            if (t is null) continue;
             var tenant = new Tenant { Name = S(t, "name") };
             db.Tenants.Add(tenant);
             var tid = tenant.Id;

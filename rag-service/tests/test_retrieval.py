@@ -20,7 +20,12 @@ def test_parcalama_basligi_ekler_ve_ortusur():
 
 
 def test_kelime_aramasi_dogru_makaleyi_one_alir():
-    idx = KeywordIndex.build([("vpn", "VPN bağlanmıyor. Anka Connect'i kapatıp açın."), ("yaz", "Yazıcı çıktı vermiyor, kuyruğu temizleyin.")])
+    idx = KeywordIndex.build(
+        [
+            ("vpn", "VPN bağlanmıyor. Anka Connect'i kapatıp açın."),
+            ("yaz", "Yazıcı çıktı vermiyor, kuyruğu temizleyin."),
+        ]
+    )
     res = idx.search("VPN bağlantısı kurulamıyor")
     assert max(res, key=lambda k: res[k][0]) == "vpn"
 
@@ -38,6 +43,8 @@ def test_guclu_kelime_eslesmesi_esigi_biraz_gevsetir():
 
 
 def test_guvenli_mod_bilinmeyen_kelimede_cevap_vermez():
-    idx = KeywordIndex.build([("izin", "Yıllık izin talebi İK portalından yapılır. Şirket çalışanları ...")])
+    idx = KeywordIndex.build(
+        [("izin", "Yıllık izin talebi İK portalından yapılır. Şirket çalışanları ...")]
+    )
     r = fuse(None, idx.search("Şirketin yıllık cirosu ne kadar"), 0.45)
     assert not r or not r[0]["confident"]
