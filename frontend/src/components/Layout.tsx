@@ -18,6 +18,7 @@ import PeopleIcon from "@mui/icons-material/PeopleOutlined";
 import SpeedIcon from "@mui/icons-material/SpeedOutlined";
 import SettingsIcon from "@mui/icons-material/SettingsOutlined";
 import MonitorIcon from "@mui/icons-material/MonitorHeartOutlined";
+import BoltIcon from "@mui/icons-material/BoltOutlined";
 import TopBar from "./TopBar";
 import CommandPalette from "./CommandPalette";
 import WelcomeTour from "./WelcomeTour";
@@ -41,6 +42,7 @@ const MANAGE: NavItem[] = [
   { to: "/incidents", label: "Büyük olaylar", icon: <IncidentIcon /> },
   { to: "/insights/gaps", label: "Bilgi boşlukları", icon: <RadarIcon /> },
   { to: "/users", label: "Kullanıcılar", icon: <PeopleIcon /> },
+  { to: "/automation", label: "Otomasyon", icon: <BoltIcon /> },
   { to: "/settings", label: "Hedefler ve ayarlar", icon: <SettingsIcon /> },
   { to: "/system", label: "Sistem ve denetim", icon: <MonitorIcon /> },
 ];

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { filenameFromDisposition } from "./helpers";
 
 // Backend adresi .env dosyasından gelir (VITE_API_URL).
 export const api = axios.create({
@@ -66,7 +67,9 @@ export interface UserLite {
   id: string; fullName: string; email: string; role: string;
   isActive?: boolean; invited?: boolean; locked?: boolean; lastLoginAt?: string | null; createdAt?: string;
 }
-export interface Project { id: string; key: string; name: string; description: string; myRole: string }
+// İlerleme: Epic'ler sayılmaz. mine = bana atanan işler, team = projenin tamamı (liste uçunda gelir)
+export interface ProgressStats { total: number; done: number; inProgress: number; overdue: number; percent: number }
+export interface Project { id: string; key: string; name: string; description: string; myRole: string; mine?: ProgressStats; team?: ProgressStats }
 export interface ProjectDetail extends Project {
   members: { userId: string; fullName: string; role: string }[];
 }
@@ -170,8 +173,9 @@ export interface SettingsT {
 export interface ArticleLite { id: string; title: string; category: string; snippet: string; published?: boolean; fromTicket?: boolean }
 export interface Article { id: string; title: string; body: string; category: string; published?: boolean }
 export interface AskResponse {
-  answered: boolean; answer?: string; message?: string; reason?: string;
-  sources?: { source_id: string; title: string }[];
+  answered: boolean; answer?: string; message?: string; reason?: string; mode?: string;
+  // snippet/text: RAG servisi cevabın dayandığı parçayı gönderirse "Kaynağı göster" onu vurgular
+  sources?: { source_id: string; title: string; snippet?: string; text?: string }[];
 }
 
 // ---- Akıllı özellikler ----
@@ -273,3 +277,33 @@ export async function fetchAttachmentUrl(id: string): Promise<string> {
   const r = await api.get(`/api/attachments/${id}`, { responseType: "blob" });
   return URL.createObjectURL(r.data as Blob);
 }
+
+// Dosya indirme (token gerektiren uçlar için): blob olarak alır, tarayıcıya kaydettirir
+export async function downloadFile(path: string, fallbackName: string): Promise<string> {
+  const r = await api.get(path, { responseType: "blob", timeout: 120000 });
+  const name = filenameFromDisposition(r.headers["content-disposition"] as string | undefined, fallbackName);
+  const url = URL.createObjectURL(r.data as Blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return name;
+}
+
+export interface TicketPage {
+  items: Ticket[]; total: number; page: number; pageSize: number; pages: number;
+  counts: { breached: number; atRisk: number };
+}
+
+export interface AutomationRuleT {
+  id: string; name: string; enabled: boolean; sortOrder: number;
+  whenCategory?: string | null; whenPriority?: string | null; whenKeywords?: string | null; whenSenderDomain?: string | null;
+  setAssigneeId?: string | null; assigneeName?: string | null; setPriority?: string | null; setCategory?: string | null;
+  notifyManagers: boolean; stopProcessing: boolean; runCount: number; lastRunAt?: string | null; createdAt: string;
+}
+export interface DigestPreview {
+  enabled: boolean; lastSentAt?: string | null; from: string; to: string;
+  opened: number; resolved: number; openNow: number; breachedOpen: number; slaPercent: number | null; csat: number | null; csatCount: number;
+  deflected: number; moneySaved: number; topUnanswered: { question: string; count: number }[]; html: string;
+}
+export interface MailChannelT { supportAddress: string; mailpitInbox: boolean; webhook: boolean; lastCheckAt?: string | null }

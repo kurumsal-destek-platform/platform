@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, MenuItem, Stack, TextField, Typography,
+  useMediaQuery, useTheme,
 } from "@mui/material";
 import ConvertIcon from "@mui/icons-material/MoveUp";
 import ArticleIcon from "@mui/icons-material/ArticleOutlined";
@@ -21,14 +22,15 @@ export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | nul
   const isManager = user?.role === "Manager" || user?.role === "Admin";
   const [converting, setConverting] = useState(false);
   const [assignedTo, setAssignedTo] = useState("");
+  const phone = useMediaQuery(useTheme().breakpoints.down("sm"));
   if (!ticket) return null;
   const workKey = ticket.workItemKey;
 
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="md">
+    <Dialog open onClose={onClose} fullWidth maxWidth="md" fullScreen={phone}>
       <DialogTitle>
         {ticket.title}
-        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+        <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap", rowGap: 1 }}>
           <Chip size="small" label={ticket.category} />
           <Chip size="small" variant="outlined" label={TICKET_STATUSES[ticket.status] ?? ticket.status} />
           <Chip size="small" variant="outlined" label={PRIORITIES[ticket.priority] ?? ticket.priority} />

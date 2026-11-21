@@ -218,6 +218,36 @@ public class TenantSettings : ITenantEntity
     public double UtcOffsetHours { get; set; } = 3;       // Türkiye
     public double HourlyCost { get; set; } = 450;         // destek personelinin saatlik maliyeti (TL)
     public double MinutesPerTicket { get; set; } = 35;    // bir ticket'ın ortalama destek emeği
+    public bool WeeklyDigest { get; set; } = true;        // pazartesi 09:00 yönetici özeti e-postası
+    public DateTime? LastDigestAt { get; set; }           // son gönderim (aynı hafta tekrar gitmesin)
+}
+
+// Otomasyon kuralı: "ŞU olursa ŞUNU yap". Yeni ticket açılınca (portal veya e-posta) sırayla çalışır.
+// Boş koşul = her ticket'a uyar. Koşullar VE ile bağlanır; anahtar kelimelerden biri geçmesi yeterli.
+public class AutomationRule : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string Name { get; set; } = "";
+    public bool Enabled { get; set; } = true;
+    public int SortOrder { get; set; }
+
+    // ---- Koşullar ----
+    public string? WhenCategory { get; set; }
+    public string? WhenPriority { get; set; }
+    public string? WhenKeywords { get; set; }        // virgülle: "vpn, uzak bağlantı"
+    public string? WhenSenderDomain { get; set; }    // ör. "anka.com" (e-postayla gelenler dahil)
+
+    // ---- Eylemler ----
+    public Guid? SetAssigneeId { get; set; }
+    public string? SetPriority { get; set; }
+    public string? SetCategory { get; set; }
+    public bool NotifyManagers { get; set; }
+    public bool StopProcessing { get; set; }         // bu kural çalışırsa sonrakilere bakma
+
+    public int RunCount { get; set; }
+    public DateTime? LastRunAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public static class IncidentStatus

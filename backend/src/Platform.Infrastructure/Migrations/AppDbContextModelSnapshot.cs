@@ -247,6 +247,66 @@ namespace Platform.Infrastructure.Migrations
                     b.ToTable("AuthTokens");
                 });
 
+            modelBuilder.Entity("Platform.Domain.AutomationRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastRunAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("NotifyManagers")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("RunCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SetAssigneeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SetCategory")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SetPriority")
+                        .HasColumnType("text");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("StopProcessing")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WhenCategory")
+                        .HasColumnType("text");
+
+                    b.Property<string>("WhenKeywords")
+                        .HasColumnType("text");
+
+                    b.Property<string>("WhenPriority")
+                        .HasColumnType("text");
+
+                    b.Property<string>("WhenSenderDomain")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AutomationRules");
+                });
+
             modelBuilder.Entity("Platform.Domain.Comment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -563,6 +623,9 @@ namespace Platform.Infrastructure.Migrations
                     b.Property<double>("HourlyCost")
                         .HasColumnType("double precision");
 
+                    b.Property<DateTime?>("LastDigestAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<double>("MinutesPerTicket")
                         .HasColumnType("double precision");
 
@@ -571,6 +634,9 @@ namespace Platform.Infrastructure.Migrations
 
                     b.Property<double>("UtcOffsetHours")
                         .HasColumnType("double precision");
+
+                    b.Property<bool>("WeeklyDigest")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("WorkDays")
                         .IsRequired()

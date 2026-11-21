@@ -45,6 +45,11 @@ services:
       Smtp__User: ${SMTP_USER:-}
       Smtp__Password: ${SMTP_PASSWORD:-}
       Smtp__From: ${SMTP_FROM:-destek@platform.local}
+      # Gelen e-posta → ticket. Demoda destek@platform.local adresine Mailpit'e gelen mailler okunur.
+      # Canlıda MAILPIT_INBOX_URL boş bırakılır, sağlayıcı webhook'u POST /api/inbound/email adresine INBOUND_SECRET ile gelir.
+      Mail__SupportAddress: ${SUPPORT_ADDRESS:-destek@platform.local}
+      Mail__Inbound__MailpitUrl: ${MAILPIT_INBOX_URL-http://mailpit:8025}
+      Mail__Inbound__Secret: ${INBOUND_SECRET:-}
       App__FrontendUrl: http://localhost:5173
       # Makale taslaklarını yazan yerel yapay zekâ (bilgisayardaki Ollama). Kapalıysa şablon kullanılır.
       Ollama__Url: http://host.docker.internal:11434

@@ -6,10 +6,11 @@ import {
 import AutoIcon from "@mui/icons-material/AutoAwesome";
 import SendIcon from "@mui/icons-material/SendRounded";
 import LockIcon from "@mui/icons-material/LockOutlined";
+import SystemIcon from "@mui/icons-material/SettingsSuggestOutlined";
 import { api, errorMessage, timeAgo, type Ticket } from "../api";
 import { initials } from "./Layout";
 
-interface Msg { id: string; body: string; internal: boolean; aiAssisted: boolean; createdAt: string; authorId: string; authorName?: string; fromSupport: boolean }
+interface Msg { id: string; body: string; internal: boolean; aiAssisted: boolean; createdAt: string; authorId: string; authorName?: string; fromSupport: boolean; system?: boolean }
 interface DraftSource { type: "article" | "ticket"; id: string; title: string; resolution?: string; rating?: number | null }
 
 // Ticket yazışması. Destek ekibi: iç not + "✨ Cevap taslağı" (yerel yapay zekâ)
@@ -51,6 +52,13 @@ export default function TicketConversation({ ticket, isSupport }: { ticket: Tick
           </Typography>
         )}
         {msgs.data?.map((m) => {
+          // Sistem notu (otomasyon kuralı, SLA eskalasyonu, e-postadan oluşturuldu): ortada, sade satır
+          if (m.system) return (
+            <Stack key={m.id} direction="row" spacing={1} sx={{ justifyContent: "center", alignItems: "center", color: "text.secondary", px: 2 }}>
+              <SystemIcon sx={{ fontSize: 15 }} />
+              <Typography variant="caption" sx={{ textAlign: "center" }}>{m.body} · {timeAgo(m.createdAt)}</Typography>
+            </Stack>
+          );
           const mine = m.fromSupport === isSupport && !(isSupport && m.authorId === ticket.reporterId);
           return (
             <Stack key={m.id} direction={mine ? "row-reverse" : "row"} spacing={1} sx={{ alignItems: "flex-end" }}>

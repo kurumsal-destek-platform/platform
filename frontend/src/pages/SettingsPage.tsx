@@ -5,6 +5,7 @@ import {
   TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from "@mui/material";
 import { api, errorMessage, formatDuration, PRIORITIES, type SettingsT } from "../api";
+import SettingsExtras from "../components/SettingsExtras";
 
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 
@@ -98,6 +99,9 @@ export default function SettingsPage() {
 
         {save.error && <Alert severity="error">{errorMessage(save.error)}</Alert>}
         <Box><Button variant="contained" onClick={() => save.mutate()} disabled={save.isPending}>Kaydet</Button></Box>
+
+        <Typography variant="h6" sx={{ fontWeight: 700, pt: 2 }}>Kanallar, bildirimler ve veri</Typography>
+        <SettingsExtras />
       </Stack>
       <Snackbar open={!!toast} autoHideDuration={4000} onClose={() => setToast("")} message={toast} />
     </Box>

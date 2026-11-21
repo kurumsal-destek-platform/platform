@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CircularProgress,
@@ -24,8 +24,10 @@ function useDebounce<T>(value: T, ms: number) {
 export default function NewTicketPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  // Asistandan gelindiyse: son soru başlığa, sohbet açıklamaya
+  const fromChat = (useLocation().state ?? null) as { title?: string; description?: string } | null;
+  const [title, setTitle] = useState(fromChat?.title?.slice(0, 200) ?? "");
+  const [description, setDescription] = useState(fromChat?.description ?? "");
   const [category, setCategory] = useState("Diğer");
   const [priority, setPriority] = useState("Medium");
   const [error, setError] = useState("");
@@ -165,6 +167,9 @@ export default function NewTicketPage() {
       <Card variant="outlined" sx={{ flex: 1, width: "100%" }}>
         <CardContent>
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Yeni ticket</Typography>
+          {fromChat?.description && (
+            <Alert severity="info" sx={{ mb: 2 }}>Asistanla yazışmanız açıklamaya eklendi; destek ekibi aynı şeyleri tekrar sormayacak.</Alert>
+          )}
           <Stack spacing={2}>
             {error && <Alert severity="error">{error}</Alert>}
             <Box

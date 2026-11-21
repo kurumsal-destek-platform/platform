@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, Avatar, Box, Button, Card, CardContent, Stack, Typography } from "@mui/material";
 import { useAuth } from "../auth";
-import { api, errorMessage, type Me } from "../api";
+import { api, downloadFile, errorMessage, type Me } from "../api";
 import { initials } from "../components/Layout";
 import { PasswordField, PasswordStrength, passwordOk } from "./AuthPages";
 import { MyBadges } from "../components/Badges";
@@ -23,6 +23,16 @@ export default function ProfilePage() {
   const [confirm, setConfirm] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const exportMine = async () => {
+    setExporting(true); setExportMsg(null);
+    try {
+      const name = await downloadFile("/api/privacy/me/export", "verilerim.json");
+      setExportMsg({ ok: true, text: `${name} indirildi.` });
+    } catch (err) { setExportMsg({ ok: false, text: errorMessage(err) }); } finally { setExporting(false); }
+  };
 
   const change = async (e: FormEvent) => {
     e.preventDefault();
@@ -78,6 +88,18 @@ export default function ProfilePage() {
               <Box><Button type="submit" variant="contained" disabled={busy}>Şifreyi değiştir</Button></Box>
             </Stack>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" sx={{ mb: 2 }}>
+        <CardContent>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Kişisel verilerim (KVKK)</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Hakkınızda tutulan bilgileri (profil, açtığınız ticket'lar, mesajlarınız, asistana sorduğunuz sorular) tek dosya olarak indirebilirsiniz.
+            Hesabınızın silinmesini isterseniz firma yöneticinize başvurun.
+          </Typography>
+          {exportMsg && <Alert severity={exportMsg.ok ? "success" : "error"} sx={{ mb: 2 }}>{exportMsg.text}</Alert>}
+          <Button variant="outlined" onClick={exportMine} disabled={exporting}>{exporting ? "Hazırlanıyor…" : "Verilerimi indir"}</Button>
         </CardContent>
       </Card>
 

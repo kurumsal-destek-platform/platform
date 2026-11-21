@@ -23,7 +23,30 @@ public class ProjectsController : ApiControllerBase
                           orderby p.Name
                           select new { p.Id, p.Key, p.Name, p.Description, myRole = m.Role })
                          .ToListAsync();
-        return Ok(list);
+
+        // İlerleme: Epic'ler kapsayıcı olduğu için sayılmaz. "mine" = bana atanan işler, "team" = projenin tamamı.
+        var ids = list.Select(x => x.Id).ToList();
+        var now = DateTime.UtcNow;
+        var items = await Db.WorkItems.Where(w => ids.Contains(w.ProjectId) && w.Type != "Epic")
+            .Select(w => new ProgressRow(w.ProjectId, w.AssigneeId, w.Status, w.DueDate)).ToListAsync();
+        object Stats(IEnumerable<ProgressRow> xs)
+        {
+            var arr = xs.ToList();
+            int total = arr.Count, done = arr.Count(x => x.Status == WorkItemStatus.Done);
+            return new
+            {
+                total, done,
+                inProgress = arr.Count(x => x.Status == WorkItemStatus.InProgress || x.Status == WorkItemStatus.InReview),
+                overdue = arr.Count(x => x.Status != WorkItemStatus.Done && x.DueDate != null && x.DueDate < now),
+                percent = total == 0 ? 0 : (int)Math.Round(100.0 * done / total),
+            };
+        }
+        return Ok(list.Select(p => new
+        {
+            p.Id, p.Key, p.Name, p.Description, p.myRole,
+            mine = Stats(items.Where(w => w.ProjectId == p.Id && w.AssigneeId == Me)),
+            team = Stats(items.Where(w => w.ProjectId == p.Id)),
+        }));
     }
 
     [HttpGet("{key}")]
@@ -79,3 +102,6 @@ public class ProjectsController : ApiControllerBase
         return NoContent();
     }
 }
+
+// Proje kartındaki ilerleme hesabı için hafif satır (dynamic yerine tipli)
+public record ProgressRow(Guid ProjectId, Guid? AssigneeId, string Status, DateTime? DueDate);
