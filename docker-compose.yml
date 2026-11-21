@@ -108,6 +108,10 @@ services:
       OLLAMA_URL: http://host.docker.internal:11434
       # Güven eşiği: eval/run_eval.py raporundaki "Önerilen eşik" buraya yazılır (.env'de RAG_THRESHOLD=0.5 gibi)
       SCORE_THRESHOLD: ${RAG_THRESHOLD:-0.45}
+      # Yinelenen ticket uyarısı: bu benzerliğin üstündeki açık ticket'lar gösterilir
+      DUP_THRESHOLD: ${RAG_DUP_THRESHOLD:-0.72}
+      # Modeller Ollama'nın belleğinde ne kadar kalsın (sunum sırasında soğumasın)
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

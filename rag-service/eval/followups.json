@@ -1,0 +1,9 @@
+[
+ {"history": "Yeni laptopa VPN programını yüklemek istiyorum", "q": "peki kişisel bilgisayarıma kurabilir miyim?", "expect": "VPN istemcisi kurulumu (Anka Connect)"},
+ {"history": "Evden şirket ağına bağlanamıyorum", "q": "otomatik yeniden bağlanma ayarı nerede?", "expect": "VPN bağlantısı sık sık kopuyor"},
+ {"history": "Teams toplantısında sesim gitmiyor", "q": "peki kamera?", "expect": "Teams toplantısında ses veya kamera çalışmıyor"},
+ {"history": "Şirket şifremi unuttum", "q": "peki hesabım kilitlendiyse?", "expect": "Hesabım kilitlendi"},
+ {"history": "Yazıcı çıktı vermiyor", "q": "toner bittiyse ne yapacağım?", "expect": "Toner ve kartuş değişimi"},
+ {"history": "Outlook'a dünden beri yeni e-posta düşmüyor", "q": "peki kotam dolduysa?", "expect": "Posta kutusu dolu uyarısı"},
+ {"history": "VPN bağlanmıyor", "q": "peki şirketin yıllık cirosu ne kadar?", "expect": null}
+]

@@ -120,7 +120,7 @@ public class KbController : ApiControllerBase
             try
             {
                 var client = _http.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(20);
+                client.Timeout = TimeSpan.FromSeconds(60); // CPU'da LLM cevabı 20 sn'yi geçebilir
                 var resp = await client.PostAsJsonAsync($"{ragUrl.TrimEnd('/')}/ask",
                     new
                     {

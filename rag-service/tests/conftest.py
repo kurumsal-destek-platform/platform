@@ -2,6 +2,7 @@ import os
 import sys
 import time
 
+import httpx
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -61,6 +62,12 @@ def rag(monkeypatch):
 
     monkeypatch.setattr(main, "sync_tenant", fake_sync)
     monkeypatch.setattr(main, "vector_scores", lambda tid, q, limit=20: None)
+    monkeypatch.setattr(main, "article_boosts", lambda tid: {})
+
+    def no_llm(*a, **k):
+        raise httpx.ConnectError("Ollama yok (test)")
+
+    monkeypatch.setattr(main, "chat", no_llm)
     main._tenants.clear()
     from fastapi.testclient import TestClient
 

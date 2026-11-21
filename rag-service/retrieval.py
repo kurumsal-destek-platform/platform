@@ -213,11 +213,15 @@ def fuse(
     threshold: float,
     w_vec: float = 0.7,
     kw_min: float = KW_MIN,
+    boosts: dict[str, float] | None = None,
 ) -> list[dict]:
     """Anlam (vektör) ve kelime puanlarını birleştirir, her parça için 'güvenilir mi' kararı verir.
     - Vektör varsa: asıl karar vektör puanıyla verilir (eşik = threshold).
       Kelime eşleşmesi çok güçlüyse (sorgunun %75'i birebir geçiyor) eşik 0.08 gevşetilir: hata kodu, ürün adı gibi.
-    - Vektör yoksa (Ollama kapalı): sadece kelime araması; sorgunun en az %60'ı geçmeli."""
+    - Vektör yoksa (Ollama kapalı): sadece kelime araması; sorgunun en az %60'ı geçmeli.
+    - boosts (parça → ±0.04): kullanıcı geri bildiriminden gelen küçük bonus. Sadece SIRALAMAYI etkiler,
+      'güvenilir mi' kararını değiştirmez; böylece geri bildirim uydurma riskini artıramaz."""
+    boosts = boosts or {}
     max_bm = max((v[0] for v in kw.values()), default=0) or 1.0
     ids = set(kw) | set(vec_scores or {})
     out = []
@@ -226,13 +230,13 @@ def fuse(
         kwn = bm / max_bm
         if vec_scores is not None:
             v = vec_scores.get(cid, 0.0)
-            score = w_vec * v + (1 - w_vec) * kwn * cov
+            score = w_vec * v + (1 - w_vec) * kwn * cov + boosts.get(cid, 0.0)
             ok = v >= threshold or (cov >= 0.75 and v >= threshold - 0.08)
             out.append(
                 {"id": cid, "score": score, "vec": v, "kw": cov, "confident": ok}
             )
         else:
-            score = kwn * cov
+            score = kwn * cov + boosts.get(cid, 0.0)
             out.append(
                 {
                     "id": cid,

@@ -8,6 +8,7 @@ RAG doğrulama testi.  Çalıştırma (proje klasöründe):
   - Doğru red: kapsam dışı, güvenlik ve başka firmaya ait sorularda "bilgim yok" diyor mu
   - Uydurma riski: cevap vermemesi gerekirken cevap verdi mi
   - Eşik kalibrasyonu: hangi güven eşiğinde en yüksek doğruluk elde ediliyor
+  - Takip soruları (eval/followups.json): "peki Mac'te?" gibi sorular önceki soruyla birlikte doğru makaleyi buluyor mu
 Sorular asistan üzerinden değil doğrudan RAG'e sorulur; bilgi boşluğu radarı kirlenmez.
 """
 
@@ -81,6 +82,29 @@ def run(tenant: str, questions: list[dict], use_llm: bool) -> dict:
     return {"rows": rows, "raw": raw}
 
 
+def run_followups(tenant: str, use_llm: bool) -> list[dict]:
+    path = os.path.join(HERE, "followups.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        items = json.load(f)
+    rows = []
+    for item in items:
+        t0 = time.time()
+        res = main.answer_question(
+            tenant, item["q"], use_llm=use_llm,
+            history=[{"question": item["history"], "answer": ""}],
+        )
+        titles = [s["title"] for s in res.get("sources", [])]
+        ok = (not res["answered"]) if item["expect"] is None else (res["answered"] and item["expect"] in titles)
+        rows.append({
+            "history": item["history"], "q": item["q"], "expect": item["expect"], "got": titles[:1],
+            "used": res.get("question_used", item["q"]), "rewrite": res.get("rewrite_mode"),
+            "ok": ok, "ms": round((time.time() - t0) * 1000),
+        })
+    return rows
+
+
 def sweep(tenant: str, raw: list[dict]) -> list[tuple[float, float]]:
     meta = main.state(tenant).meta
     out = []
@@ -106,6 +130,8 @@ def report(res: dict, tenant: str, use_llm: bool):
     top3 = sum(r["ok"] for r in ins)
     rej = sum(r["ok"] for r in oos)
     halluc = sum(r["verdict"] == "UYDURMA RİSKİ" for r in oos)
+    times = sorted(r["ms"] for r in rows)
+    p95 = times[min(len(times) - 1, int(len(times) * 0.95))] if times else 0
     mode = rows[0]["mode"] if rows else "?"
     sw = sweep(tenant, res["raw"]) if res["raw"] else []
     best = (
@@ -127,8 +153,8 @@ def report(res: dict, tenant: str, use_llm: bool):
         f"| Doğru makaleyi **ilk sırada** buldu | **%{round(100 * top1 / len(ins))}** ({top1}/{len(ins)}) |",
         f"| Doğru makale **ilk 3** içinde | **%{round(100 * top3 / len(ins))}** ({top3}/{len(ins)}) |",
         f"| Kapsam dışı / güvenlik / başka firma sorusunu **doğru reddetti** | **%{round(100 * rej / len(oos))}** ({rej}/{len(oos)}) |",
-        f"| Uydurma riski (cevap vermemesi gerekirken verdi) | {halluc} |",
-        f"| Ortalama cevap süresi | {round(statistics.mean(r['ms'] for r in rows))} ms |",
+        f"| **Uydurma oranı** (cevap vermemesi gerekirken verdi) | **%{round(100 * halluc / len(oos))}** ({halluc}/{len(oos)}) |",
+        f"| Ortalama cevap süresi | {round(statistics.mean(r['ms'] for r in rows))} ms (en yavaş %5: {p95} ms) |",
         "",
     ]
     if best:
@@ -142,6 +168,23 @@ def report(res: dict, tenant: str, use_llm: bool):
             f"Önerilen eşik: **{best[0]}** (docker-compose.yml → rag → SCORE_THRESHOLD)",
             "",
         ]
+    fu = res.get("followups") or []
+    if fu:
+        fok = sum(r["ok"] for r in fu)
+        lines += [
+            "## Takip soruları (sohbet bağlamı)",
+            "",
+            f"Doğru: **%{round(100 * fok / len(fu))}** ({fok}/{len(fu)})",
+            "",
+            "| Önceki soru | Takip sorusu | Aranan soru | Sonuç |",
+            "|---|---|---|---|",
+        ]
+        lines += [
+            f'| {r["history"]} | {r["q"]} | {r["used"]} ({r["rewrite"] or "değişmedi"}) | '
+            f'{"✓" if r["ok"] else "✗ beklenen: " + (r["expect"] or "bilgim yok") + ", gelen: " + str(r["got"] or "bilgim yok")} |'
+            for r in fu
+        ]
+        lines += [""]
     lines += ["## Hatalı sonuçlar", ""]
     bad = [r for r in rows if not r["ok"]]
     lines += [
@@ -168,4 +211,6 @@ if __name__ == "__main__":
     with open(os.path.join(HERE, "questions.json"), encoding="utf-8") as f:
         qs = json.load(f)
     tid = tenant_id(a.tenant)
-    report(run(tid, qs, a.llm), tid, a.llm)
+    result = run(tid, qs, a.llm)
+    result["followups"] = run_followups(tid, a.llm)
+    report(result, tid, a.llm)
