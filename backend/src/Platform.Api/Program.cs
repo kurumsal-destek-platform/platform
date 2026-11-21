@@ -44,6 +44,9 @@ builder.Services.AddScoped<LocalLlm>();
 builder.Services.AddScoped<RagClient>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<SlaMonitor>();
+builder.Services.AddScoped<MailProcessor>();
+builder.Services.AddHostedService<MailpitInbox>();          // Mail:Inbound:MailpitUrl boşsa çalışmaz
+builder.Services.AddHostedService<WeeklyDigestService>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -99,7 +102,8 @@ builder.Services.AddRateLimiter(o =>
 
 builder.Services.AddCors(o => o.AddPolicy("fe", p => p
     .WithOrigins("http://localhost:5173", "http://localhost:3000")
-    .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+    .AllowAnyHeader().AllowAnyMethod().AllowCredentials()
+    .WithExposedHeaders("Content-Disposition")));   // indirilen dosyanın adını tarayıcı okuyabilsin (KVKK dışa aktarma)
 
 builder.Services.AddControllers(o => { o.Filters.Add<LiveBroadcastFilter>(); o.Filters.Add<AuditFilter>(); });
 builder.Services.AddEndpointsApiExplorer();

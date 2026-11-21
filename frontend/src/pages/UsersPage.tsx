@@ -30,6 +30,7 @@ export default function UsersPage() {
   const [toast, setToast] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [menu, setMenu] = useState<{ el: HTMLElement; u: UserLite } | null>(null);
+  const [erase, setErase] = useState<UserLite | null>(null);
 
   const users = useQuery({
     queryKey: ["users", "all"],
@@ -53,7 +54,8 @@ export default function UsersPage() {
       </Stack>
       {users.error && <Alert severity="error">{errorMessage(users.error)}</Alert>}
 
-      <Table size="small" sx={{ bgcolor: "background.paper" }}>
+      <Box sx={{ overflowX: "auto" }}>
+      <Table size="small" sx={{ bgcolor: "background.paper", minWidth: 720 }}>
         <TableHead>
           <TableRow>
             <TableCell>Kullanıcı</TableCell><TableCell>E-posta</TableCell><TableCell>Rol</TableCell>
@@ -84,6 +86,7 @@ export default function UsersPage() {
           })}
         </TableBody>
       </Table>
+      </Box>
 
       <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
         {menu?.u.invited && menu.u.isActive && (
@@ -91,6 +94,9 @@ export default function UsersPage() {
         )}
         {menu?.u.locked && (
           <MenuItem onClick={() => run(() => api.post(`/api/users/${menu.u.id}/unlock`), "Kilit kaldırıldı")}>Kilidi kaldır</MenuItem>
+        )}
+        {menu && isAdmin && (
+          <MenuItem sx={{ color: "error.main" }} onClick={() => { setErase(menu.u); setMenu(null); }}>Kişisel veriyi sil (KVKK)…</MenuItem>
         )}
         {menu && (
           <MenuItem sx={{ color: menu.u.isActive ? "error.main" : undefined }}
@@ -103,8 +109,43 @@ export default function UsersPage() {
 
       <InviteDialog open={inviteOpen} roles={roleOptions} onClose={() => setInviteOpen(false)}
         onDone={(email) => { setInviteOpen(false); setToast(`${email} adresine davet gönderildi`); qc.invalidateQueries({ queryKey: ["users"] }); }} />
+      <EraseDialog user={erase} onClose={() => setErase(null)}
+        onDone={(msg) => { setErase(null); setToast(msg); qc.invalidateQueries({ queryKey: ["users"] }); }} />
       <Snackbar open={!!toast} autoHideDuration={3500} onClose={() => setToast("")} message={toast} />
     </Box>
+  );
+}
+
+// KVKK: ayrılan çalışanın kişisel verisini sil. Geri alınamaz → adını yazarak onaylatılır.
+function EraseDialog({ user, onClose, onDone }: { user: UserLite | null; onClose: () => void; onDone: (msg: string) => void }) {
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState("");
+  const m = useMutation({
+    mutationFn: async () => (await api.post<{ message: string }>(`/api/privacy/users/${user!.id}/anonymize`)).data,
+    onSuccess: (d) => { setTyped(""); setError(""); onDone(d.message); },
+    onError: (e) => setError(errorMessage(e)),
+  });
+  const close = () => { setTyped(""); setError(""); onClose(); };
+  const ok = !!user && typed.trim().toLocaleLowerCase("tr-TR") === user.fullName.trim().toLocaleLowerCase("tr-TR");
+  return (
+    <Dialog open={!!user} onClose={close} fullWidth maxWidth="xs">
+      <DialogTitle>Kişisel veriyi sil</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          {error && <Alert severity="error">{error}</Alert>}
+          <Alert severity="warning">
+            <b>{user?.fullName}</b> kullanıcısının adı, e-postası ve şifresi kalıcı olarak silinir, oturumları kapanır.
+            Açtığı ticket'lar ve istatistikler "Silinmiş kullanıcı" adıyla korunur. <b>Bu işlem geri alınamaz.</b>
+          </Alert>
+          <TextField label="Onaylamak için kişinin adını yazın" value={typed} onChange={(e) => setTyped(e.target.value)}
+            placeholder={user?.fullName} autoFocus />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={close}>Vazgeç</Button>
+        <Button color="error" variant="contained" disabled={!ok || m.isPending} onClick={() => m.mutate()}>Kalıcı olarak sil</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

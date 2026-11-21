@@ -8,8 +8,10 @@ using Platform.Infrastructure;
 namespace Platform.Api.Controllers;
 
 public record CreateArticleRequest(string Title, string Body, string? Category);
-public record FeedbackRequest(Guid? ArticleId, bool Solved, string? Source = null, int? StepsTried = null);
-public record AskRequest(string Question);
+public record FeedbackRequest(Guid? ArticleId, bool Solved, string? Source = null, int? StepsTried = null, string? Question = null);
+// History: sohbetteki son soru-cevaplar (takip sorusu için, ör. "peki Mac'te?"). RAG servisi kullanır.
+public record ChatTurn(string Question, string? Answer);
+public record AskRequest(string Question, List<ChatTurn>? History = null);
 
 [Route("api")]
 public class KbController : ApiControllerBase
@@ -92,6 +94,16 @@ public class KbController : ApiControllerBase
     {
         var source = req.Source is "wizard" or "assistant" ? req.Source : "article";
         Db.KbFeedbacks.Add(new KbFeedback { UserId = Me, ArticleId = req.ArticleId, Solved = req.Solved, Source = source, StepsTried = req.StepsTried });
+
+        // Asistanın cevabı "işe yaramadı" → soru cevapsız sayılır ve bilgi boşluğu radarına düşer
+        if (source == "assistant" && !req.Solved && !string.IsNullOrWhiteSpace(req.Question))
+        {
+            var text = TextUtil.Snip(req.Question.Trim(), 500);
+            var since = DateTime.UtcNow.AddHours(-2);
+            var q = await Db.AssistantQueries.Where(x => x.UserId == Me && x.Question == text && x.CreatedAt >= since)
+                .OrderByDescending(x => x.CreatedAt).FirstOrDefaultAsync();
+            if (q is not null) q.Answered = false;
+        }
         await Db.SaveChangesAsync();
         return NoContent();
     }
@@ -110,7 +122,12 @@ public class KbController : ApiControllerBase
                 var client = _http.CreateClient();
                 client.Timeout = TimeSpan.FromSeconds(20);
                 var resp = await client.PostAsJsonAsync($"{ragUrl.TrimEnd('/')}/ask",
-                    new { tenant_id = tenantId, question = req.Question, user_id = Me.ToString() });
+                    new
+                    {
+                        tenant_id = tenantId, question = req.Question, user_id = Me.ToString(),
+                        history = (req.History ?? new()).TakeLast(3)
+                            .Select(h => new { question = TextUtil.Snip(h.Question ?? "", 500), answer = TextUtil.Snip(h.Answer ?? "", 1500) }),
+                    });
                 if (resp.IsSuccessStatusCode)
                 {
                     var json = await resp.Content.ReadFromJsonAsync<JsonElement>();

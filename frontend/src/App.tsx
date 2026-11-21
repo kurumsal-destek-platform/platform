@@ -8,6 +8,7 @@ import IncidentsPage from "./pages/IncidentsPage";
 import KnowledgeGapsPage from "./pages/KnowledgeGapsPage";
 import PerformancePage from "./pages/PerformancePage";
 import SettingsPage from "./pages/SettingsPage";
+import AutomationPage from "./pages/AutomationPage";
 import SystemPage from "./pages/SystemPage";
 import HomePage from "./pages/HomePage";
 import ProjectsPage from "./pages/ProjectsPage";
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/insights/gaps" element={<KnowledgeGapsPage />} />
         <Route path="/performance" element={<PerformancePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/automation" element={<AutomationPage />} />
         <Route path="/system" element={<SystemPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>

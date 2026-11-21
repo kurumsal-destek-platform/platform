@@ -36,10 +36,7 @@ public class TicketsController : ApiControllerBase
             Title = req.Title.Trim(), Description = req.Description ?? "",
             Category = req.Category ?? "Diğer", Priority = req.Priority ?? "Medium", ReporterId = Me,
         };
-        Db.Tickets.Add(t);
-        var (policies, settings) = await Sla.LoadAsync(Db, Guid.Empty);
-        Sla.ApplyTargets(t, policies, settings);
-        var managers = await Db.Users.Where(u => u.Role == Roles.Manager || u.Role == Roles.Admin).Select(u => u.Id).ToListAsync();
+        t.TenantId = Db.CurrentTenantId!.Value;
 
         // "Ben de etkileniyorum": bilinen bir olaya katıl
         if (req.IncidentId is Guid incId)
@@ -54,23 +51,9 @@ public class TicketsController : ApiControllerBase
             }
         }
 
-        if (t.IncidentId is null)
-        {
-            foreach (var m in managers)
-                Events.Notify(Db, t.TenantId, m, Me, $"Yeni ticket: {t.Category}", t.Title, "/tickets");
-
-            // Erken uyarı: son 2 saatte bu ticket'a benzeyen 2+ açık ticket daha varsa olası büyük olay
-            var since = DateTime.UtcNow.AddHours(-2);
-            var recent = await Db.Tickets.Where(x => x.IncidentId == null && x.CreatedAt >= since &&
-                    (x.Status == TicketStatus.Open || x.Status == TicketStatus.Assigned || x.Status == TicketStatus.InProgress))
-                .Select(x => new { x.Title, x.Description }).ToListAsync();
-            var v = TextSim.Vec(t.Title, t.Description);
-            var similar = recent.Count(x => TextSim.Cosine(v, TextSim.Vec(x.Title, x.Description)) >= IncidentsController.ClusterThreshold);
-            if (similar >= 2)
-                foreach (var m in managers)
-                    Events.Notify(Db, t.TenantId, m, Guid.Empty, "⚠ Olası büyük olay",
-                        $"Son 2 saatte \"{t.Title}\" benzeri {similar + 1} ticket açıldı. Tek olayda birleştirmek ister misiniz?", "/incidents");
-        }
+        // Otomasyon kuralları, SLA hedefleri, bildirimler ve olası büyük olay uyarısı (e-postayla gelenlerle ortak)
+        var myEmail = await Db.Users.Where(u => u.Id == Me).Select(u => u.Email).FirstOrDefaultAsync();
+        await TicketIntake.CreateAsync(Db, t, Me, myEmail);
         await Db.SaveChangesAsync();
         return Ok(ToDto(t, await UserNamesAsync()));
     }
@@ -88,12 +71,56 @@ public class TicketsController : ApiControllerBase
 
     // Tüm ticketlar: yönetici görünümü
     [HttpGet]
-    public async Task<IActionResult> All([FromQuery] string? status)
+    // page verilirse sayfalı cevap döner: { items, total, page, pageSize, pages, counts }; verilmezse eski davranış (tüm liste).
+    // Filtreler: status, open=true (açık/atandı/işlemde), search (başlık+açıklama), sla=at_risk|breached
+    public async Task<IActionResult> All([FromQuery] string? status, [FromQuery] string? search,
+        [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] bool open = false, [FromQuery] string? sla = null)
     {
         if (!IsManagerOrAdmin) return Forbidden("Tüm ticketları sadece yöneticiler görebilir.");
         var q = Db.Tickets.AsQueryable();
         if (!string.IsNullOrEmpty(status)) q = q.Where(t => t.Status == status);
-        var list = await q.OrderByDescending(t => t.CreatedAt).ToListAsync();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            q = q.Where(t => t.Title.ToLower().Contains(s) || t.Description.ToLower().Contains(s));
+        }
+        var searched = q;
+        if (open) q = q.Where(t => Sla.OpenStatuses.Contains(t.Status));
+        q = q.OrderByDescending(t => t.CreatedAt);
+
+        if (page is int p)
+        {
+            var size = Math.Clamp(pageSize ?? 25, 1, 100);
+            p = Math.Max(1, p);
+            var now = DateTime.UtcNow;
+            int total;
+            List<Ticket> pageItems;
+            if (sla is "at_risk" or "breached")
+            {
+                // SLA durumu zamana bağlı hesaplandığı için bellekte süzülür (sadece bu filtre seçiliyken)
+                var filtered = (await q.ToListAsync()).Where(t => Sla.Summary(t, now) == sla).ToList();
+                total = filtered.Count;
+                pageItems = filtered.Skip((p - 1) * size).Take(size).ToList();
+            }
+            else
+            {
+                total = await q.CountAsync();
+                pageItems = await q.Skip((p - 1) * size).Take(size).ToListAsync();
+            }
+            // Filtre düğmelerindeki sayılar: açık ticketlar arasında
+            var openOnes = await searched.Where(t => Sla.OpenStatuses.Contains(t.Status)).ToListAsync();
+            var counts = new
+            {
+                breached = openOnes.Count(t => Sla.Summary(t, now) == "breached"),
+                atRisk = openOnes.Count(t => Sla.Summary(t, now) == "at_risk"),
+            };
+            var n = await UserNamesAsync();
+            var k = await ItemKeysAsync(pageItems);
+            return Ok(new { items = pageItems.Select(t => ToDto(t, n, k)), total, page = p, pageSize = size,
+                            pages = Math.Max(1, (int)Math.Ceiling(total / (double)size)), counts });
+        }
+
+        var list = await q.ToListAsync();
         var names = await UserNamesAsync();
         var keys = await ItemKeysAsync(list);
         return Ok(list.Select(t => ToDto(t, names, keys)));

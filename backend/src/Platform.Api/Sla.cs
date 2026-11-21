@@ -15,6 +15,10 @@ public static class Sla
 
     public static TenantSettings DefaultSettings(Guid tenantId) => new() { TenantId = tenantId };
 
+    // Çözüm süresi aşılan yüksek/kritik ticket bir yöneticide değilse yöneticiye yükseltilir
+    public static bool ShouldEscalate(string priority, Guid? assigneeId, IEnumerable<Guid> managerIds) =>
+        priority is "High" or "Critical" && (assigneeId is null || !managerIds.Contains(assigneeId.Value));
+
     private static HashSet<int> Days(TenantSettings s) =>
         s.WorkDays.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToHashSet();
 
@@ -61,6 +65,15 @@ public static class Sla
         var total = (due.Value - created).TotalMinutes;
         var left = (due.Value - now).TotalMinutes;
         return total > 0 && left / total < 0.25 ? "at_risk" : "running";
+    }
+
+    // Listeleme filtresi için özet: "breached" | "at_risk" | "ok" (frontend'deki slaOf ile aynı kural)
+    public static string Summary(Ticket t, DateTime now)
+    {
+        var resolvedAt = t.Status is TicketStatus.Resolved or TicketStatus.Closed ? t.ResolvedAt ?? now : (DateTime?)null;
+        var r = State(t.CreatedAt, t.ResponseDueAt, t.FirstResponseAt ?? resolvedAt, now);
+        var z = State(t.CreatedAt, t.ResolutionDueAt, resolvedAt, now);
+        return r == "breached" || z == "breached" ? "breached" : r == "at_risk" || z == "at_risk" ? "at_risk" : "ok";
     }
 
     public static object Dto(Ticket t, DateTime now)
@@ -128,7 +141,11 @@ public class SlaMonitor : BackgroundService
         var tenants = tickets.Select(t => t.TenantId).Distinct().ToList();
         var managers = await db.Users.IgnoreQueryFilters()
             .Where(u => tenants.Contains(u.TenantId) && u.IsActive && (u.Role == Roles.Manager || u.Role == Roles.Admin))
-            .Select(u => new { u.Id, u.TenantId }).ToListAsync(ct);
+            .Select(u => new { u.Id, u.TenantId, u.FullName, u.Role }).ToListAsync(ct);
+        // Eskalasyonda iş yükü en az olan yönetici seçilir
+        var load = await db.Tickets.IgnoreQueryFilters()
+            .Where(x => tenants.Contains(x.TenantId) && x.AssigneeId != null && Sla.OpenStatuses.Contains(x.Status))
+            .GroupBy(x => x.AssigneeId!.Value).Select(g => new { Id = g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Id, x => x.N, ct);
 
         var touched = new HashSet<Guid>();
         foreach (var t in tickets)
@@ -144,6 +161,28 @@ public class SlaMonitor : BackgroundService
                 foreach (var u in targets.Distinct())
                     Events.Notify(db, t.TenantId, u, Guid.Empty, "🔴 SLA aşıldı", $"\"{t.Title}\" için {what} süresi doldu.", "/tickets?sla=breached");
                 t.SlaBreachNotified = true; t.SlaWarned = true; touched.Add(t.TenantId);
+
+                // Eskalasyon: yüksek/kritik ticket'ın çözüm süresi aşıldıysa ve bir yönetici ilgilenmiyorsa yöneticiye yükselt
+                var tenantManagers = managers.Where(m => m.TenantId == t.TenantId).ToList();
+                if (res == "breached" && Sla.ShouldEscalate(t.Priority, t.AssigneeId, tenantManagers.Select(m => m.Id)))
+                {
+                    var to = tenantManagers.Where(m => m.Role == Roles.Manager).DefaultIfEmpty(tenantManagers.FirstOrDefault())
+                        .Where(m => m is not null).OrderBy(m => load.GetValueOrDefault(m!.Id)).FirstOrDefault();
+                    if (to is not null)
+                    {
+                        var before = t.AssigneeId;
+                        t.AssigneeId = to.Id;
+                        if (t.Status == TicketStatus.Open) t.Status = TicketStatus.Assigned;
+                        load[to.Id] = load.GetValueOrDefault(to.Id) + 1;
+                        db.TicketMessages.Add(new TicketMessage
+                        {
+                            TenantId = t.TenantId, TicketId = t.Id, AuthorId = TicketIntake.System, Internal = true,
+                            Body = $"⬆ SLA aşıldı: {Automation.PriorityLabel(t.Priority).ToLower()} öncelikli ticket {to.FullName} kişisine yükseltildi" +
+                                   (before is null ? "." : " (önceki atanan bilgilendirildi)."),
+                        });
+                        Events.Notify(db, t.TenantId, to.Id, Guid.Empty, "⬆ Size yükseltilen ticket", $"\"{t.Title}\" SLA süresini aştı.", $"/tickets?open={t.Id}");
+                    }
+                }
             }
             else if (!t.SlaWarned && (res == "at_risk" || resp == "at_risk"))
             {

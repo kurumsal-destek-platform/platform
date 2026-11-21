@@ -14,10 +14,11 @@ public class TicketMessagesController : ApiControllerBase
     private readonly LocalLlm _llm;
     private readonly IHttpClientFactory _http;
     private readonly IConfiguration _cfg;
+    private readonly MailProcessor _mail;
 
-    public TicketMessagesController(AppDbContext db, LocalLlm llm, IHttpClientFactory http, IConfiguration cfg) : base(db)
+    public TicketMessagesController(AppDbContext db, LocalLlm llm, IHttpClientFactory http, IConfiguration cfg, MailProcessor mail) : base(db)
     {
-        _llm = llm; _http = http; _cfg = cfg;
+        _llm = llm; _http = http; _cfg = cfg; _mail = mail;
     }
 
     // Açan kişi, atanan ve yöneticiler görebilir. Destek tarafı = atanan veya yönetici.
@@ -41,7 +42,8 @@ public class TicketMessagesController : ApiControllerBase
         return Ok(msgs.Select(m => new
         {
             m.Id, m.Body, m.Internal, m.AiAssisted, m.CreatedAt, m.AuthorId,
-            authorName = names.GetValueOrDefault(m.AuthorId),
+            authorName = m.AuthorId == TicketIntake.System ? "Sistem" : names.GetValueOrDefault(m.AuthorId),
+            system = m.AuthorId == TicketIntake.System,
             fromSupport = m.AuthorId != t.ReporterId,
         }));
     }
@@ -75,7 +77,12 @@ public class TicketMessagesController : ApiControllerBase
         }
         await Db.SaveChangesAsync();
         var names = await UserNamesAsync();
-        return Ok(new { m.Id, m.Body, m.Internal, m.AiAssisted, m.CreatedAt, m.AuthorId, authorName = names.GetValueOrDefault(Me), fromSupport = Me != t.ReporterId });
+
+        // Destek ekibinin cevabı çalışana e-postayla da gider; çalışan maili yanıtlarsa cevap bu ticket'a düşer
+        if (!req.Internal && support && Me != t.ReporterId)
+            await _mail.SendReplyAsync(t, names.GetValueOrDefault(Me) ?? "Destek ekibi", m.Body);
+
+        return Ok(new { m.Id, m.Body, m.Internal, m.AiAssisted, m.CreatedAt, m.AuthorId, authorName = names.GetValueOrDefault(Me) ?? (m.AuthorId == TicketIntake.System ? "Sistem" : null), fromSupport = Me != t.ReporterId });
     }
 
     // ✨ Cevap taslağı: bilgi bankası + geçmişte işe yarayan çözümler + yazışma → yerel yapay zekâ

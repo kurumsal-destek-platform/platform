@@ -3,13 +3,18 @@ Kurulum sonrası otomatik kontrol.  Çalıştırma (proje klasöründe):
     docker compose exec rag python scripts/smoke_test.py
 
 Tüm sistemi uçtan uca dener ve neyin çalışıp neyin çalışmadığını Türkçe açıklar.
-Demo verisini DEĞİŞTİRMEZ (tek yan etki: Ayşe'ye bir şifre sıfırlama e-postası gider → Mailpit).
+Demo verisini neredeyse değiştirmez. Yan etkiler: Ayşe'ye şifre sıfırlama e-postası gider (Mailpit) ve
+e-posta kanalını denemek için "[Otomatik test]" başlıklı bir ticket açılıp hemen "çözüldü" yapılır.
 """
 
 import io
 import os
+import smtplib
 import sys
 import time
+import uuid
+from email.message import EmailMessage
+from urllib.parse import urlparse
 
 import httpx
 
@@ -388,6 +393,196 @@ def _():
     ).json()
     assert any("Giriş" in a["action"] for a in j), "giriş kayıtları görünmüyor"
     return OK, f"son 24 saatte {len(j)} güvenlik kaydı"
+
+
+@check("Ticket listesi sayfalama")
+def _():
+    r = c.get(
+        f"{API}/api/tickets",
+        params={"page": 2, "pageSize": 10},
+        headers=H(S["tok"]),
+    )
+    assert r.status_code == 200, f"HTTP {r.status_code}"
+    j = r.json()
+    assert isinstance(j, dict) and len(j["items"]) == 10, "sayfalı cevap gelmedi"
+    assert j["total"] == len(S["tickets"]), (
+        f"toplam {j['total']}, liste {len(S['tickets'])}"
+    )
+    return OK, f"sayfa 2/{j['pages']} · 10 kayıt · toplam {j['total']}"
+
+
+@check("KVKK: firma verisi dışa aktarma")
+def _():
+    tok, _ = login("admin@anka.com")
+    r = c.get(f"{API}/api/privacy/tenant/export", headers=H(tok), timeout=60)
+    assert r.status_code == 200, f"HTTP {r.status_code}"
+    assert "passwordHash" not in r.text and "tokenHash" not in r.text, (
+        "dışa aktarılan dosyada şifre özeti var!"
+    )
+    j = r.json()
+    r2 = c.get(f"{API}/api/privacy/tenant/export", headers=H(S["tok"]))
+    assert r2.status_code == 403, (
+        f"yönetici (Admin değil) indirebildi: HTTP {r2.status_code}"
+    )
+    kb = len(r.content) // 1024
+    return (
+        OK,
+        f"{len(j['tickets'])} ticket, {len(j['users'])} kullanıcı ({kb} KB) · sadece Admin",
+    )
+
+
+def send_mail(sender: str, to: str, subject: str, body: str) -> None:
+    """Mailpit'in SMTP kapısına (1025) e-posta bırakır: dışarıdan gelen bir maili taklit eder."""
+    m = EmailMessage()
+    m["From"], m["To"], m["Subject"] = sender, to, subject
+    m.set_content(body)
+    with smtplib.SMTP(urlparse(MAIL).hostname, 1025, timeout=10) as s:
+        s.send_message(m)
+
+
+def wait_for(fn, seconds: int = 45):
+    """fn bir değer döndürene kadar bekler (gelen kutusu 10 sn'de bir okunur)."""
+    end = time.time() + seconds
+    while time.time() < end:
+        v = fn()
+        if v:
+            return v
+        time.sleep(2)
+    return None
+
+
+@check("E-postadan ticket (destek@ adresine mail)")
+def _():
+    ch = c.get(f"{API}/api/mail/channel", headers=H(S["tok"])).json()
+    if not ch.get("mailpitInbox"):
+        return SKIP, "gelen kutusu kapalı (MAILPIT_INBOX_URL boş)"
+    code = uuid.uuid4().hex[:6]
+    subject = f"[Otomatik test] Yazıcı kağıt sıkıştırıyor {code}"
+    send_mail(
+        "ayse@anka.com",
+        ch["supportAddress"],
+        subject,
+        "3. kattaki yazıcı sürekli kağıt sıkıştırıyor.",
+    )
+
+    def find():
+        r = c.get(
+            f"{API}/api/tickets",
+            params={"page": 1, "pageSize": 5, "search": code},
+            headers=H(S["tok"]),
+        )
+        items = r.json().get("items", []) if r.status_code == 200 else []
+        return items[0] if items else None
+
+    t = wait_for(find)
+    assert t, (
+        "45 sn içinde ticket oluşmadı (api loglarında 'Gelen e-posta' satırına bakın)"
+    )
+    S["mail_ticket"] = t
+    return (
+        OK,
+        f'ticket açıldı: "{t["title"]}" · bildiren: {t.get("reporterName", "Ayşe")}',
+    )
+
+
+@check("E-posta cevabı ticket'a düşüyor")
+def _():
+    t = S.get("mail_ticket")
+    if not t:
+        return SKIP, "önceki kontrol geçmedi"
+    tag = f"[#{t['id'].replace('-', '')[:8]}]"
+    # 1) Destek ekibinin cevabı Ayşe'ye e-posta olarak gitmeli
+    r = c.post(
+        f"{API}/api/tickets/{t['id']}/messages",
+        json={"body": "Merhaba, tepsiyi çıkarıp sıkışan kağıdı alır mısınız?"},
+        headers=H(S["tok"]),
+    )
+    assert r.status_code == 200, f"cevap yazılamadı: HTTP {r.status_code}"
+
+    def mail_out():
+        q = {"query": "to:ayse@anka.com", "limit": 20}
+        msgs = c.get(f"{MAIL}/api/v1/search", params=q).json().get("messages") or []
+        return [m for m in msgs if tag in m.get("Subject", "")] or None
+
+    assert wait_for(mail_out, 20), "destek cevabı e-posta olarak gitmedi"
+    # 2) Ayşe maili yanıtlıyor → aynı ticket'a mesaj olarak eklenmeli
+    send_mail(
+        "ayse@anka.com",
+        "destek@platform.local",
+        f"Re: {t['title']} {tag}",
+        "Denedim, düzeldi. Teşekkürler!\n\n> eski mesaj",
+    )
+
+    def reply_in():
+        msgs = c.get(
+            f"{API}/api/tickets/{t['id']}/messages", headers=H(S["tok"])
+        ).json()
+        return [m for m in msgs if "düzeldi" in m["body"]] or None
+
+    got = wait_for(reply_in)
+    c.patch(
+        f"{API}/api/tickets/{t['id']}/status",
+        json={"status": "resolved", "resolutionNote": "Otomatik test"},
+        headers=H(S["tok"]),
+    )
+    assert got, "çalışanın e-posta cevabı ticket'a eklenmedi"
+    assert "eski mesaj" not in got[0]["body"], "alıntılanan eski yazışma ayıklanmadı"
+    return OK, f"cevap Ayşe'ye mail gitti, Ayşe'nin yanıtı ticket'a eklendi ({tag})"
+
+
+@check("Otomasyon kuralları")
+def _():
+    users = c.get(f"{API}/api/users", headers=H(S["tok"])).json()
+    ali = next((u for u in users if u["fullName"].startswith("Ali")), None)
+    assert ali, "Ali Çelik bulunamadı"
+    rule = {
+        "name": "Smoke test kuralı",
+        "whenKeywords": "smoketest-vpn",
+        "setAssigneeId": ali["id"],
+        "setPriority": "High",
+        "stopProcessing": True,
+        "sortOrder": -1000,
+    }
+    r = c.post(f"{API}/api/automation/rules", json=rule, headers=H(S["tok"]))
+    assert r.status_code == 200, (
+        f"kural eklenemedi: HTTP {r.status_code} {r.text[:120]}"
+    )
+    rid = r.json()["id"]
+    try:
+        t = c.post(
+            f"{API}/api/automation/rules/test",
+            json={"title": "SMOKETEST-VPN bağlanmıyor"},
+            headers=H(S["tok"]),
+        ).json()
+        res = t["result"]
+        assert any(m["ruleId"] == rid for m in t["matched"]), "kural eşleşmedi"
+        assert res["assigneeId"] == ali["id"] and res["priority"] == "High", (
+            f"beklenmeyen sonuç: {res}"
+        )
+        emp, _ = login("ayse@anka.com")
+        r2 = c.get(f"{API}/api/automation/rules", headers=H(emp))
+        assert r2.status_code == 403, (
+            f"çalışan kuralları görebildi: HTTP {r2.status_code}"
+        )
+    finally:
+        c.delete(f"{API}/api/automation/rules/{rid}", headers=H(S["tok"]))
+    return (
+        OK,
+        f'"vpn" içeren ticket → {res["assigneeName"]}, öncelik Yüksek (kural silindi)',
+    )
+
+
+@check("Haftalık yönetici özeti")
+def _():
+    r = c.get(f"{API}/api/digest/preview", headers=H(S["tok"]))
+    assert r.status_code == 200, f"HTTP {r.status_code}"
+    d = r.json()
+    sla = f"%{d['slaPercent']}" if d["slaPercent"] is not None else "–"
+    csat = f"{d['csat']}" if d["csat"] is not None else "–"
+    return OK, (
+        f"son 7 gün: {d['opened']} açılan, {d['resolved']} çözülen, SLA {sla}, "
+        f"memnuniyet {csat} · {'açık' if d['enabled'] else 'kapalı'}"
+    )
 
 
 @check("Sistem durumu")

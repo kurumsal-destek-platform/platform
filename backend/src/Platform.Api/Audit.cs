@@ -25,6 +25,14 @@ public class AuditFilter : IAsyncActionFilter
         (new(@"^PUT /api/users/[^/]+/role$"), "Kullanıcı rolünü değiştirdi"),
         (new(@"^PUT /api/users/[^/]+/active$"), "Kullanıcıyı etkinleştirdi/devre dışı bıraktı"),
         (new(@"^POST /api/users/[^/]+/unlock$"), "Hesap kilidini kaldırdı"),
+        (new(@"^GET /api/privacy/tenant/export$"), "KVKK: Firma verisini dışa aktardı"),
+        (new(@"^POST /api/automation/rules/test$"), "Otomasyon kuralını denedi"),
+        (new(@"^POST /api/automation/rules$"), "Otomasyon kuralı ekledi"),
+        (new(@"^PUT /api/automation/rules/[^/]+$"), "Otomasyon kuralını düzenledi"),
+        (new(@"^DELETE /api/automation/rules/[^/]+$"), "Otomasyon kuralını sildi"),
+        (new(@"^PUT /api/digest/settings$"), "Haftalık özet ayarını değiştirdi"),
+        (new(@"^GET /api/privacy/me/export$"), "KVKK: Kendi verisini indirdi"),
+        (new(@"^POST /api/privacy/users/[^/]+/anonymize$"), "KVKK: Kullanıcının kişisel verisini sildi"),
         (new(@"^POST /api/tickets$"), "Ticket oluşturdu"),
         (new(@"^PUT /api/tickets/[^/]+/assignee$"), "Ticket atadı"),
         (new(@"^PATCH /api/tickets/[^/]+/status$"), "Ticket durumunu değiştirdi"),
@@ -60,7 +68,7 @@ public class AuditFilter : IAsyncActionFilter
         var http = ctx.HttpContext;
         var method = http.Request.Method;
         var path = http.Request.Path.Value ?? "";
-        if (HttpMethods.IsGet(method) || Skip.IsMatch(path)) return;
+        if ((HttpMethods.IsGet(method) && !path.StartsWith("/api/privacy/")) || Skip.IsMatch(path)) return;   // veri dışa aktarma (GET) da kayda girer
         try
         {
             var code = done.Exception is not null ? 500 : done.Result is IStatusCodeActionResult { StatusCode: int c } ? c : 200;

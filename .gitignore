@@ -34,3 +34,7 @@ ml/models/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+
+# Veritabanı yedekleri (kişisel veri içerir, asla commit edilmez)
+backups/*.dump
+backups/*.sql*
