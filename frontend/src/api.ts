@@ -67,7 +67,9 @@ export interface UserLite {
   id: string; fullName: string; email: string; role: string;
   isActive?: boolean; invited?: boolean; locked?: boolean; lastLoginAt?: string | null; createdAt?: string;
 }
-export interface Project { id: string; key: string; name: string; description: string; myRole: string }
+// İlerleme: Epic'ler sayılmaz. mine = bana atanan işler, team = projenin tamamı (liste uçunda gelir)
+export interface ProgressStats { total: number; done: number; inProgress: number; overdue: number; percent: number }
+export interface Project { id: string; key: string; name: string; description: string; myRole: string; mine?: ProgressStats; team?: ProgressStats }
 export interface ProjectDetail extends Project {
   members: { userId: string; fullName: string; role: string }[];
 }
