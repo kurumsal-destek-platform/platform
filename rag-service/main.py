@@ -9,6 +9,12 @@ Akış:
   3) Güven eşiğinin altındaysa "bilgim yok" denir (uydurma yok). Değilse yerel LLM, bulunan
      parçalara dayanarak cevap yazar ve kaynakları gösterir.
 
+  4) Sohbet: son 3 soru-cevap da gelir; "peki Mac'te?" gibi takip sorusu önce tam soruya çevrilir, sonra aranır.
+  5) Geri bildirim: "İşe yaradı" denen makaleler sıralamada hafifçe öne çıkar (güven eşiği değişmez).
+  6) Ticket'lar: yeni ticket yazılırken anlamca benzeyen açık ticket'lar bulunur (yinelenen uyarısı) ve
+     geçmiş ticket'lara bakılarak kategori/öncelik önerilir.
+  7) Isıtma: servis açılınca modeller bir kez çağrılır ve indeksler hazırlanır; ilk soru yavaş gelmez.
+
 Model EĞİTİLMEZ. Model geneldir; bilgi her firmanın kendi makalelerinden gelir.
 Dış AI servisi yok: embedding ve LLM, Ollama ile bu makinede çalışır.
 Dayanıklılık: Ollama kapalıysa kelime aramasıyla, LLM çökerse en iyi makale parçasıyla cevap verilir.
@@ -20,17 +26,28 @@ import os
 import re
 import threading
 import time
+import uuid
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 import httpx
 import numpy as np
 import psycopg
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+import conversation
 import extract as docextract
 import ocr
-from retrieval import KeywordIndex, chunk_article, fuse
+from retrieval import KeywordIndex, chunk_article, fuse, tokens
+from tickets import (
+    OPEN_STATUSES,
+    feedback_boost,
+    keyword_similarity,
+    ticket_hash,
+    ticket_text,
+    vote,
+)
 
 # ---------------- Ayarlar ----------------
 DATABASE_URL = os.getenv(
@@ -47,17 +64,35 @@ INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")  # boşsa kontrol edilmez
 SYNC_TTL_SECONDS = int(
     os.getenv("SYNC_TTL_SECONDS", "60")
 )  # en geç bu kadar saniyede bir değişiklik kontrolü
+# Model bellekte ne kadar kalsın (Ollama varsayılanı 5 dk; sunum sırasında soğumasın)
+KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
+# Yinelenen ticket: bu benzerliğin üstündeki AÇIK ticket'lar "aynı sorun olabilir" diye gösterilir
+DUP_THRESHOLD = float(os.getenv("DUP_THRESHOLD", "0.72"))
+# Kategori/öncelik önerisi: oy verecek geçmiş ticket'ın en az benzerliği
+TRIAGE_MIN_SIM = float(os.getenv("TRIAGE_MIN_SIM", "0.55"))
+TICKET_SYNC_TTL = int(os.getenv("TICKET_SYNC_TTL", "20"))
+FEEDBACK_TTL = int(os.getenv("FEEDBACK_TTL", "60"))
+WARMUP = os.getenv("WARMUP", "true").lower() != "false"
 
 NO_INFO = "Bu konuda bilgim yok, ticket açabilirsiniz."
 log = logging.getLogger("rag")
-app = FastAPI(title="RAG servisi v2")
+logging.basicConfig(level=logging.INFO)
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    _start_warmup()  # aşağıda tanımlı; servis açılınca arka planda modelleri ısıtır
+    yield
+
+
+app = FastAPI(title="RAG servisi v2", lifespan=lifespan)
 
 
 # ---------------- Ollama ----------------
 def embed(texts: list[str]) -> np.ndarray:
     r = httpx.post(
         f"{OLLAMA_URL}/api/embed",
-        json={"model": EMBED_MODEL, "input": texts},
+        json={"model": EMBED_MODEL, "input": texts, "keep_alive": KEEP_ALIVE},
         timeout=180,
     )
     r.raise_for_status()
@@ -65,19 +100,20 @@ def embed(texts: list[str]) -> np.ndarray:
     return v / np.linalg.norm(v, axis=1, keepdims=True)
 
 
-def chat(system: str, user: str) -> str:
+def chat(system: str, user: str, num_predict: int = 350, timeout: float = 90) -> str:
     r = httpx.post(
         f"{OLLAMA_URL}/api/chat",
         json={
             "model": LLM_MODEL,
             "stream": False,
-            "options": {"temperature": 0.1, "num_predict": 350},
+            "keep_alive": KEEP_ALIVE,
+            "options": {"temperature": 0.1, "num_predict": num_predict},
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
         },
-        timeout=90,
+        timeout=timeout,
     )
     r.raise_for_status()
     return r.json()["message"]["content"].strip()
@@ -120,6 +156,19 @@ def ensure_schema():
             c.execute(
                 "CREATE INDEX IF NOT EXISTS ix_rag_chunks_tenant ON rag_chunks (tenant_id)"
             )
+            # Ticket vektörleri (yinelenen uyarısı + kategori/öncelik önerisi). Ticket'ın kendisi
+            # backend'in "Tickets" tablosunda kalır; burada sadece vektörü tutulur, durum her sorguda oradan okunur.
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS rag_tickets (
+                    id           uuid PRIMARY KEY,          -- Tickets.Id
+                    tenant_id    uuid NOT NULL,
+                    content_hash text NOT NULL,
+                    embedding    vector,
+                    updated_at   timestamptz NOT NULL DEFAULT now()
+                )""")
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS ix_rag_tickets_tenant ON rag_tickets (tenant_id)"
+            )
         _schema_ready = True
 
 
@@ -129,6 +178,10 @@ class TenantState:
         self.kw: KeywordIndex | None = None
         self.meta: dict[str, dict] = {}  # chunk_id → {article_id, title, content}
         self.lock = threading.Lock()
+        self.boosts: dict[str, float] = {}  # article_id → geri bildirim bonusu
+        self.boosts_at = 0.0
+        self.tickets_synced_at = 0.0
+        self.tickets_lock = threading.Lock()
 
 
 _tenants: dict[str, TenantState] = {}
@@ -247,6 +300,35 @@ def vector_scores(
     return {r[0]: float(r[1]) for r in rows}
 
 
+def article_boosts(tenant_id: str) -> dict[str, float]:
+    """Kullanıcı geri bildirimi (KbFeedbacks: İşe yaradı / Yaramadı) → makale başına küçük sıralama bonusu.
+    Son 180 günün oyları sayılır; FEEDBACK_TTL saniyede bir tazelenir. Hata olursa bonus yok (arama etkilenmez)."""
+    st = state(tenant_id)
+    if time.time() - st.boosts_at < FEEDBACK_TTL:
+        return st.boosts
+    boosts: dict[str, float] = {}
+    try:
+        with db() as c:
+            rows = c.execute(
+                """SELECT "ArticleId"::text,
+                          count(*) FILTER (WHERE "Solved"),
+                          count(*) FILTER (WHERE NOT "Solved")
+                   FROM "KbFeedbacks"
+                   WHERE "TenantId" = %s::uuid AND "ArticleId" IS NOT NULL
+                     AND "CreatedAt" > now() - interval '180 days'
+                   GROUP BY 1""",
+                (tenant_id,),
+            ).fetchall()
+        for aid, solved, unsolved in rows:
+            b = feedback_boost(solved, unsolved)
+            if b:
+                boosts[aid] = b
+    except Exception as e:  # noqa: BLE001  tablo yoksa vb.
+        log.info("Geri bildirim okunamadı (%s); bonus uygulanmıyor.", e)
+    st.boosts, st.boosts_at = boosts, time.time()
+    return boosts
+
+
 def search(
     tenant_id: str, query: str, k: int = TOP_K, threshold: float = SCORE_THRESHOLD
 ) -> dict:
@@ -255,7 +337,13 @@ def search(
     sync_tenant(tenant_id)
     st = state(tenant_id)
     vec = vector_scores(tenant_id, query)
-    ranked = fuse(vec, st.kw.search(query) if st.kw else {}, threshold)
+    art_boost = article_boosts(tenant_id)
+    boosts = {
+        cid: art_boost[m["article_id"]]
+        for cid, m in st.meta.items()
+        if m["article_id"] in art_boost
+    }
+    ranked = fuse(vec, st.kw.search(query) if st.kw else {}, threshold, boosts=boosts)
     hits = []
     for r in ranked[: k * 3]:
         m = st.meta.get(r["id"])
@@ -266,9 +354,233 @@ def search(
                     "source_id": m["article_id"],
                     "title": m["title"],
                     "text": m["content"],
+                    "boost": boosts.get(r["id"], 0.0),
                 }
             )
     return {"mode": "hybrid" if vec is not None else "keyword", "hits": hits[: k * 2]}
+
+
+# ---------------- Ticket indeksi (yinelenen uyarısı + kategori/öncelik önerisi) ----------------
+def sync_tickets(tenant_id: str, force: bool = False) -> dict:
+    """Firmanın son 3000 ticket'ının vektörünü rag_tickets'ta günceller. Sadece yeni/değişenler hesaplanır.
+    Ollama kapalıysa vektörsüz kalır; çağıran kelime aramasına düşer."""
+    ensure_schema()
+    st = state(tenant_id)
+    with st.tickets_lock:
+        if not force and time.time() - st.tickets_synced_at < TICKET_SYNC_TTL:
+            return {"skipped": True}
+        with db() as c:
+            rows = c.execute(
+                'SELECT "Id"::text, "Title", "Description" FROM "Tickets" '
+                'WHERE "TenantId" = %s::uuid ORDER BY "CreatedAt" DESC LIMIT 3000',
+                (tenant_id,),
+            ).fetchall()
+            wanted = {r[0]: (r[1] or "", r[2] or "") for r in rows}
+            existing = {
+                r[0]: r[1]
+                for r in c.execute(
+                    "SELECT id::text, content_hash FROM rag_tickets WHERE tenant_id = %s::uuid",
+                    (tenant_id,),
+                )
+            }
+            stale = [tid for tid in existing if tid not in wanted]
+            if stale:
+                c.execute("DELETE FROM rag_tickets WHERE id = ANY(%s::uuid[])", (stale,))
+            changed = 0
+            for tid, (title, desc) in wanted.items():
+                h = ticket_hash(EMBED_MODEL, title, desc)
+                if existing.get(tid) != h:
+                    c.execute(
+                        """INSERT INTO rag_tickets (id, tenant_id, content_hash, embedding, updated_at)
+                           VALUES (%s::uuid, %s::uuid, %s, NULL, now())
+                           ON CONFLICT (id) DO UPDATE SET content_hash = EXCLUDED.content_hash,
+                               embedding = NULL, updated_at = now()""",
+                        (tid, tenant_id, h),
+                    )
+                    changed += 1
+            missing = [
+                r[0]
+                for r in c.execute(
+                    "SELECT id::text FROM rag_tickets WHERE tenant_id = %s::uuid AND embedding IS NULL",
+                    (tenant_id,),
+                )
+                if r[0] in wanted
+            ]
+            embedded = 0
+            try:
+                for i in range(0, len(missing), 32):
+                    batch = missing[i : i + 32]
+                    vecs = embed([ticket_text(*wanted[t]) for t in batch])
+                    for tid, v in zip(batch, vecs):
+                        c.execute(
+                            "UPDATE rag_tickets SET embedding = %s::vector WHERE id = %s::uuid",
+                            (vec_literal(v), tid),
+                        )
+                    embedded += len(batch)
+            except (httpx.HTTPError, KeyError) as e:
+                log.warning("Ticket embedding yapılamadı (%s); kelime aramasıyla devam.", e)
+        st.tickets_synced_at = time.time()
+        return {
+            "tickets": len(wanted),
+            "changed": changed,
+            "removed": len(stale),
+            "embedded": embedded,
+            "missing_vectors": len(missing) - embedded,
+        }
+
+
+def _ticket_query_vector(title: str, description: str) -> str | None:
+    try:
+        return vec_literal(embed([ticket_text(title, description)])[0])
+    except (httpx.HTTPError, KeyError) as e:
+        log.warning("Ticket metni vektörleştirilemedi (%s); kelime araması kullanılacak.", e)
+        return None
+
+
+def similar_tickets(
+    tenant_id: str,
+    title: str,
+    description: str = "",
+    exclude_id: str | None = None,
+    limit: int = 3,
+    threshold: float | None = None,
+) -> dict:
+    """Yeni yazılan ticket'a anlamca çok benzeyen AÇIK ticket'lar (sadece aynı firma)."""
+    threshold = DUP_THRESHOLD if threshold is None else threshold
+    text = ticket_text(title, description)
+    if not tokens(text):
+        return {"mode": "none", "threshold": threshold, "matches": []}
+    sync_tickets(tenant_id)
+    q = _ticket_query_vector(title, description)
+    matches = []
+    with db() as c:
+        if q is not None:
+            rows = c.execute(
+                """SELECT t."Id"::text, t."Title", t."Status", t."CreatedAt", t."ReporterId"::text,
+                          1 - (r.embedding <=> %s::vector) AS sim
+                   FROM rag_tickets r JOIN "Tickets" t ON t."Id" = r.id
+                   WHERE r.tenant_id = %s::uuid AND t."TenantId" = %s::uuid
+                     AND r.embedding IS NOT NULL AND t."Status" = ANY(%s)
+                     AND (%s::uuid IS NULL OR t."Id" <> %s::uuid)
+                   ORDER BY r.embedding <=> %s::vector LIMIT 10""",
+                (q, tenant_id, tenant_id, list(OPEN_STATUSES), exclude_id, exclude_id, q),
+            ).fetchall()
+            mode = "semantic"
+            for tid, ttitle, status, created, reporter, sim in rows:
+                if sim >= threshold:
+                    matches.append((tid, ttitle, status, created, reporter, float(sim)))
+        else:
+            rows = c.execute(
+                """SELECT "Id"::text, "Title", "Description", "Status", "CreatedAt", "ReporterId"::text
+                   FROM "Tickets" WHERE "TenantId" = %s::uuid AND "Status" = ANY(%s)
+                     AND (%s::uuid IS NULL OR "Id" <> %s::uuid)
+                   ORDER BY "CreatedAt" DESC LIMIT 1000""",
+                (tenant_id, list(OPEN_STATUSES), exclude_id, exclude_id),
+            ).fetchall()
+            mode = "keyword"
+            info = {r[0]: r for r in rows}
+            sims = keyword_similarity(text, [(r[0], ticket_text(r[1], r[2])) for r in rows])
+            for tid, sim in sims.items():
+                r = info[tid]
+                matches.append((tid, r[1], r[3], r[4], r[5], sim))
+    matches.sort(key=lambda m: -m[5])
+    matches = matches[: max(1, min(limit, 10))]
+    n = len(matches)
+    return {
+        "mode": mode,
+        "threshold": threshold,
+        "matches": [
+            {
+                "ticket_id": tid,
+                "title": t,
+                "status": s,
+                "created_at": cr.isoformat() if hasattr(cr, "isoformat") else cr,
+                "reporter_id": rep,
+                "similarity": round(sim, 3),
+            }
+            for tid, t, s, cr, rep, sim in matches
+        ],
+        "message": (
+            f"Bu sorun için {n} açık ticket var, takip etmek ister misiniz?" if n else None
+        ),
+    }
+
+
+def suggest_triage(tenant_id: str, title: str, description: str = "") -> dict:
+    """Geçmiş ticket'lardan en benzerleri oy verir → kategori ve öncelik önerisi. Benzer yoksa suggestion=None."""
+    text = ticket_text(title, description)
+    if not tokens(text):
+        return {"mode": "none", "suggestion": None}
+    sync_tickets(tenant_id)
+    q = _ticket_query_vector(title, description)
+    with db() as c:
+        if q is not None:
+            rows = c.execute(
+                """SELECT t."Category", t."Priority", 1 - (r.embedding <=> %s::vector)
+                   FROM rag_tickets r JOIN "Tickets" t ON t."Id" = r.id
+                   WHERE r.tenant_id = %s::uuid AND t."TenantId" = %s::uuid AND r.embedding IS NOT NULL
+                   ORDER BY r.embedding <=> %s::vector LIMIT 25""",
+                (q, tenant_id, tenant_id, q),
+            ).fetchall()
+            neighbors = [(float(s), cat, pri) for cat, pri, s in rows]
+            return {"mode": "semantic", "suggestion": vote(neighbors, TRIAGE_MIN_SIM)}
+        rows = c.execute(
+            """SELECT "Id"::text, "Title", "Description", "Category", "Priority" FROM "Tickets"
+               WHERE "TenantId" = %s::uuid ORDER BY "CreatedAt" DESC LIMIT 1000""",
+            (tenant_id,),
+        ).fetchall()
+    info = {r[0]: r for r in rows}
+    sims = keyword_similarity(text, [(r[0], ticket_text(r[1], r[2])) for r in rows], min_cov=0.5)
+    neighbors = [(s, info[t][3], info[t][4]) for t, s in sims.items()]
+    return {"mode": "keyword", "suggestion": vote(neighbors, 0.5)}
+
+
+# ---------------- Isıtma ----------------
+WARM: dict = {"state": "pending", "embed": False, "llm": False, "seconds": None, "detail": None}
+
+
+def warmup() -> dict:
+    """Modelleri belleğe yükler ve tüm firmaların indekslerini hazırlar: ilk soru yavaş gelmesin."""
+    t0 = time.time()
+    WARM["state"] = "running"
+    try:
+        embed(["ısınma"])
+        WARM["embed"] = True
+    except (httpx.HTTPError, KeyError) as e:
+        WARM["detail"] = f"embedding modeli yüklenemedi: {e}"
+    try:
+        chat("Kısa cevap ver.", "Merhaba", num_predict=5, timeout=180)
+        WARM["llm"] = True
+    except (httpx.HTTPError, KeyError) as e:
+        WARM["detail"] = f"dil modeli yüklenemedi: {e}"
+    indexed = 0
+    try:
+        with db() as c:
+            tenants = [r[0] for r in c.execute('SELECT "Id"::text FROM "Tenants"')]
+        for tid in tenants:
+            sync_tenant(tid, force=True)
+            sync_tickets(tid, force=True)
+            indexed += 1
+    except Exception as e:  # noqa: BLE001  veritabanı henüz hazır değilse
+        WARM["detail"] = f"indeks hazırlanamadı: {e}"
+    WARM["state"] = "done"
+    WARM["seconds"] = round(time.time() - t0, 1)
+    WARM["tenants"] = indexed
+    log.info("Isıtma bitti: %s", WARM)
+    return WARM
+
+
+def _start_warmup():
+    if WARMUP:
+        # API'yi bekletmeden arka planda; backend ilk açılışta tabloları oluştururken birkaç kez dener
+        def run():
+            for _ in range(10):
+                warmup()
+                if WARM.get("tenants"):
+                    return
+                time.sleep(15)
+
+        threading.Thread(target=run, daemon=True).start()
 
 
 # ---------------- Güvenlik ----------------
@@ -288,10 +600,24 @@ SYSTEM_PROMPT = (
 
 
 # ---------------- API ----------------
+class ChatTurn(BaseModel):
+    question: str = ""
+    answer: str | None = None
+
+
 class AskRequest(BaseModel):
     tenant_id: str
     question: str
     user_id: str | None = None
+    history: list[ChatTurn] = Field(default_factory=list)  # son soru-cevaplar (takip sorusu için)
+
+
+class TicketTextRequest(BaseModel):
+    tenant_id: str
+    title: str
+    description: str = ""
+    exclude_id: str | None = None  # düzenlenen ticket'ın kendisi
+    limit: int = 3
 
 
 class SearchRequest(BaseModel):
@@ -330,7 +656,51 @@ def health():
         "embed_model": EMBED_MODEL,
         "llm_model": LLM_MODEL,
         "threshold": SCORE_THRESHOLD,
+        "duplicate_threshold": DUP_THRESHOLD,
+        "warmup": WARM,
     }
+
+
+@app.post("/warmup")
+def warmup_endpoint(x_internal_key: str | None = Header(default=None)):
+    """Sunumdan önce elle ısıtmak için: modelleri yükler, indeksleri hazırlar."""
+    check_key(x_internal_key)
+    return warmup()
+
+
+def _uuid_or_400(value: str | None, name: str) -> str | None:
+    if value is None or value == "":
+        return None
+    try:
+        return str(uuid.UUID(str(value)))
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"{name} geçerli bir kimlik değil")
+
+
+@app.post("/similar-tickets")
+def similar_tickets_endpoint(
+    req: TicketTextRequest, x_internal_key: str | None = Header(default=None)
+):
+    """Yinelenen ticket uyarısı: yazılmakta olan ticket'a çok benzeyen açık ticket'lar."""
+    check_key(x_internal_key)
+    tid = _uuid_or_400(req.tenant_id, "tenant_id")
+    if not tid:
+        raise HTTPException(status_code=400, detail="tenant_id zorunlu")
+    return similar_tickets(
+        tid, req.title, req.description, _uuid_or_400(req.exclude_id, "exclude_id"), req.limit
+    )
+
+
+@app.post("/suggest-triage")
+def suggest_triage_endpoint(
+    req: TicketTextRequest, x_internal_key: str | None = Header(default=None)
+):
+    """Yeni ticket için kategori ve öncelik önerisi (geçmiş benzer ticket'lara göre)."""
+    check_key(x_internal_key)
+    tid = _uuid_or_400(req.tenant_id, "tenant_id")
+    if not tid:
+        raise HTTPException(status_code=400, detail="tenant_id zorunlu")
+    return suggest_triage(tid, req.title, req.description)
 
 
 @app.post("/reindex")
@@ -390,7 +760,29 @@ def coverage(req: CoverageRequest, x_internal_key: str | None = Header(default=N
     return {"mode": "semantic", "threshold": SCORE_THRESHOLD, "scores": scores}
 
 
-def answer_question(tenant_id: str, question: str, use_llm: bool = True) -> dict:
+def _rewrite_followup(question: str, history: list[dict], use_llm: bool) -> tuple[str, str | None]:
+    """Takip sorusunu tam soruya çevirir. Dönen: (aranacak soru, yöntem: llm | keyword | None)."""
+    if not conversation.is_followup(question, history):
+        return question, None
+    if use_llm:
+        try:
+            out = chat(
+                conversation.REWRITE_PROMPT,
+                conversation.build_rewrite_input(question, history),
+                num_predict=60,
+                timeout=30,
+            )
+            rewritten = conversation.clean_rewrite(out, question)
+            if rewritten:
+                return rewritten, "llm"
+        except (httpx.HTTPError, KeyError):
+            pass
+    return conversation.fallback_rewrite(question, history), "keyword"
+
+
+def answer_question(
+    tenant_id: str, question: str, use_llm: bool = True, history=None
+) -> dict:
     question = (question or "").strip()
     if not question:
         return {"answered": False, "reason": "empty", "message": NO_INFO}
@@ -399,8 +791,25 @@ def answer_question(tenant_id: str, question: str, use_llm: bool = True) -> dict
     if INJECTION.search(question):
         return {"answered": False, "reason": "blocked", "message": NO_INFO}
 
-    # 2) Firma içi hibrit arama; güvenilir sonuç yoksa "bilgim yok"
-    r = search(tenant_id, question)
+    # 2) Sohbet bağlamı: "peki Mac'te?" → "VPN istemcisi Mac'te nasıl kurulur?"
+    turns = conversation.normalize_history(history)
+    query, rewrite_mode = _rewrite_followup(question, turns, use_llm)
+    if rewrite_mode and INJECTION.search(query):
+        return {"answered": False, "reason": "blocked", "message": NO_INFO}
+    extra = {"followup": rewrite_mode is not None}
+    if rewrite_mode:
+        extra.update({"question_used": query, "rewrite_mode": rewrite_mode})
+
+    # 3) Firma içi hibrit arama; güvenilir sonuç yoksa "bilgim yok"
+    r = None
+    if rewrite_mode == "keyword" and not conversation.FOLLOWUP_START.search(question):
+        # LLM'siz birleştirme yeni bir konuyu ("Yazıcı arızası") önceki konuyla karıştırabilir:
+        # soru tek başına güvenilir sonuç veriyorsa onu kullan.
+        alone = search(tenant_id, question)
+        if alone["hits"] and alone["hits"][0]["confident"]:
+            r, query, extra = alone, question, {"followup": False}
+    if r is None:
+        r = search(tenant_id, query)
     hits, mode = r["hits"], r["mode"]
     best = hits[0] if hits else None
     if not best or not best["confident"]:
@@ -415,6 +824,7 @@ def answer_question(tenant_id: str, question: str, use_llm: bool = True) -> dict
                 else (best["score"] if best else 0),
                 3,
             ),
+            **extra,
         }
 
     relevant = [h for h in hits if h["confident"]][:TOP_K]
@@ -422,15 +832,27 @@ def answer_question(tenant_id: str, question: str, use_llm: bool = True) -> dict
     for h in relevant:
         if h["source_id"] not in seen:
             seen.add(h["source_id"])
-            sources.append({"source_id": h["source_id"], "title": h["title"]})
+            # excerpt: "Kaynağı göster" butonu cevabın dayandığı makale parçasını açar
+            sources.append(
+                {
+                    "source_id": h["source_id"],
+                    "title": h["title"],
+                    "excerpt": h["text"],
+                    "score": round(h["vec"] if h["vec"] is not None else h["score"], 3),
+                }
+            )
     context = "\n\n".join(f"[{i + 1}] {h['text']}" for i, h in enumerate(relevant))
 
-    # 3) Yerel LLM ile cevap; LLM yoksa/çökerse en iyi parçayı olduğu gibi döndür
+    # 4) Yerel LLM ile cevap; LLM yoksa/çökerse en iyi parçayı olduğu gibi döndür
     answer, generated = None, False
     if use_llm:
+        prev = ""
+        if turns and extra["followup"]:
+            prev = f"Önceki soru: {turns[-1]['question']}\n"
         try:
             answer = chat(
-                SYSTEM_PROMPT, f"<baglam>\n{context}\n</baglam>\n\nSoru: {question}"
+                SYSTEM_PROMPT,
+                f"<baglam>\n{context}\n</baglam>\n\n{prev}Soru: {query}",
             )
             generated = True
         except (httpx.HTTPError, KeyError):
@@ -444,6 +866,7 @@ def answer_question(tenant_id: str, question: str, use_llm: bool = True) -> dict
             "reason": "llm_no_info",
             "message": NO_INFO,
             "mode": mode,
+            **extra,
         }
 
     return {
@@ -455,6 +878,7 @@ def answer_question(tenant_id: str, question: str, use_llm: bool = True) -> dict
         "best_score": round(
             best["vec"] if best["vec"] is not None else best["score"], 3
         ),
+        **extra,
     }
 
 
@@ -501,4 +925,4 @@ def ask(req: AskRequest, x_internal_key: str | None = Header(default=None)):
     check_key(x_internal_key)
     if not (req.tenant_id or "").strip():
         raise HTTPException(status_code=400, detail="tenant_id zorunlu")
-    return answer_question(req.tenant_id, req.question)
+    return answer_question(req.tenant_id, req.question, history=req.history)

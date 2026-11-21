@@ -156,6 +156,31 @@ public class RagClient
         });
     }
 
+    // Yinelenen ticket uyarısı / kategori-öncelik önerisi için RAG'e ticket taslağını gönderir. RAG kapalıysa null.
+    // path: "similar-tickets" veya "suggest-triage"
+    public async Task<JsonElement?> TicketAssistAsync(string path, Guid tenantId, string title, string? description,
+        Guid? excludeId = null, CancellationToken ct = default)
+    {
+        if (BaseUrl is not string url) return null;
+        try
+        {
+            var c = _http.CreateClient();
+            c.Timeout = TimeSpan.FromSeconds(30);
+            var resp = await c.PostAsJsonAsync($"{url}/{path}", new
+            {
+                tenant_id = tenantId.ToString(), title, description = description ?? "",
+                exclude_id = excludeId?.ToString(), limit = 3,
+            }, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogInformation("RAG {Path} yapılamadı ({Msg}); kelime yöntemine düşülüyor.", path, ex.Message);
+            return null;
+        }
+    }
+
     // Her metin için bilgi bankasındaki en yakın parçanın anlamsal benzerliği. RAG/Ollama kapalıysa null.
     public async Task<(double[] Scores, double Threshold)?> CoverageAsync(Guid tenantId, IReadOnlyList<string> texts, CancellationToken ct = default)
     {

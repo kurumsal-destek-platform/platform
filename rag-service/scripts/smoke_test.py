@@ -245,6 +245,73 @@ def _():
     ), f'mod: {r["mode"]} · ilk sonuç: "{top["title"]}" (güvenilir: {top["confident"]})'
 
 
+@check("Model ısıtma (ilk soru hızlı)")
+def _():
+    w = S.get("rag", {}).get("warmup") or {}
+    if w.get("state") != "done":
+        return WARN, f"ısıtma sürüyor ({w.get('state', '?')}); 1-2 dk sonra tekrar deneyin"
+    if not (w.get("embed") and w.get("llm")):
+        return WARN, f"modeller yüklenemedi: {w.get('detail')} → 'ollama list' ile modelleri kontrol edin"
+    return OK, f"modeller bellekte · {w.get('tenants', 0)} firma indekslendi · {w.get('seconds')} sn"
+
+
+@check("Asistan: takip sorusu (sohbet bağlamı)")
+def _():
+    first = "VPN programını yeni bilgisayara nasıl kurarım"
+    a = c.post(
+        f"{API}/api/assistant/ask", headers=H(S["tok"]), json={"question": first}, timeout=120
+    ).json()
+    r = c.post(
+        f"{API}/api/assistant/ask",
+        headers=H(S["tok"]),
+        json={
+            "question": "peki Mac'te?",
+            "history": [{"question": first, "answer": a.get("answer") or a.get("message")}],
+        },
+        timeout=120,
+    ).json()
+    assert "followup" in r, "RAG takip sorusunu tanımadı (RAG servisi kapalı mı, yedek aramaya mı düşüldü?)"
+    used = r.get("question_used", "?")
+    if r.get("rewrite_mode") != "llm":
+        return WARN, f'yapay zekâsız birleştirme: "{used[:50]}" (Ollama kapalı/yavaş)'
+    return OK, f'"peki Mac\'te?" → "{used[:55]}"'
+
+
+@check("Yinelenen ticket uyarısı")
+def _():
+    r = c.post(
+        f"{API}/api/tickets/similar",
+        headers=H(S["tok"]),
+        json={"title": "VPN'e bağlanamıyorum", "description": "evden çalışırken bağlantı kurulamıyor"},
+        timeout=120,
+    )
+    assert r.status_code == 200, f"HTTP {r.status_code}"
+    j = r.json()
+    assert j["matches"], "VPN seli olmasına rağmen benzer açık ticket bulunamadı"
+    top = j["matches"][0]
+    return (OK if j["mode"] == "semantic" else WARN), (
+        f'mod: {j["mode"]} · {len(j["matches"])} benzer açık ticket · ilk: "{top["title"][:35]}" ({top["similarity"]})'
+    )
+
+
+@check("Kategori ve öncelik önerisi")
+def _():
+    r = c.post(
+        f"{API}/api/tickets/suggest-triage",
+        headers=H(S["tok"]),
+        json={"title": "Yazıcı kağıt sıkıştırıyor", "description": "2. kattaki yazıcı sürekli kağıt sıkıştırıyor"},
+        timeout=120,
+    )
+    assert r.status_code == 200, f"HTTP {r.status_code}"
+    j = r.json()
+    s = j.get("suggestion")
+    assert s and s.get("category"), "öneri gelmedi (geçmişte benzer ticket yok mu?)"
+    return (OK if j["mode"] == "semantic" else WARN), (
+        f'mod: {j["mode"]} · kategori: {s["category"]} (%{round(100 * s["categoryConfidence"])}) · '
+        f'öncelik: {s["priority"]} · {s["basedOn"]} benzer ticket'
+    )
+
+
 @check("Ekran görüntüsü okuma (OCR)")
 def _():
     if S.get("rag", {}).get("ocr") != "ok":
