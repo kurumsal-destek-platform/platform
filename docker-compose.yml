@@ -126,7 +126,10 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: ${VITE_API_URL:-same-origin}
+        # Frontend API'ye aynı adresin /api yolundan gider (nginx yönlendirir). Değiştirmek gerekirse .env'de WEB_API_URL.
+        # Not: eski .env dosyalarındaki VITE_API_URL=http://localhost:5000 satırı artık okunmaz
+        # (okunsaydı giriş ekranı "Sunucuya ulaşılamıyor" hatası verirdi).
+        VITE_API_URL: ${WEB_API_URL:-same-origin}
     container_name: platform-web
     restart: unless-stopped
     depends_on:
