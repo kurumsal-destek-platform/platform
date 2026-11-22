@@ -11,7 +11,8 @@ import { api, CATEGORIES, errorMessage, type Article, type ArticleLite } from ".
 
 export default function KnowledgePage() {
   const { user } = useAuth();
-  const isManager = user?.role === "Manager" || user?.role === "Admin";
+  const isManager = user?.role === "Manager" || user?.role === "Admin" || user?.role === "Agent";   // destek ekibi makale yazar
+  const canImport = user?.role === "Manager" || user?.role === "Admin";
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState("");
   const [drafts, setDrafts] = useState(isManager);
@@ -35,7 +36,7 @@ export default function KnowledgePage() {
           <FormControlLabel control={<Switch checked={drafts} onChange={(e) => setDrafts(e.target.checked)} />} label="Taslakları göster" />
         )}
         <Box sx={{ flex: 1 }} />
-        {isManager && <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => setImportOpen(true)}>Doküman içe aktar</Button>}
+        {canImport && <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => setImportOpen(true)}>Doküman içe aktar</Button>}
       </Stack>
       {imported && (
         <Alert severity="success" onClose={() => setImported(null)} sx={{ mb: 2 }}>

@@ -30,7 +30,7 @@ public class KbController : ApiControllerBase
     public async Task<IActionResult> Articles([FromQuery] string? q, [FromQuery] string? category, [FromQuery] bool drafts = false)
     {
         // Yöneticiler taslakları da görebilir
-        var all = await Db.Articles.Where(a => a.Published || (drafts && IsManagerOrAdmin)).ToListAsync();
+        var all = await Db.Articles.Where(a => a.Published || (drafts && IsSupport)).ToListAsync();
         if (!string.IsNullOrEmpty(category)) all = all.Where(a => a.Category == category).ToList();
         var result = string.IsNullOrWhiteSpace(q) ? all.OrderBy(a => a.Title).ToList()
             : KbSearch.Rank(all, q, 50).Select(x => x.Article).ToList();
@@ -41,13 +41,13 @@ public class KbController : ApiControllerBase
     public async Task<IActionResult> Article(Guid id)
     {
         var a = await Db.Articles.FirstOrDefaultAsync(x => x.Id == id);
-        return a is null || (!a.Published && !IsManagerOrAdmin) ? NotFound() : Ok(a);
+        return a is null || (!a.Published && !IsSupport) ? NotFound() : Ok(a);
     }
 
     [HttpPost("kb/articles")]
     public async Task<IActionResult> CreateArticle(CreateArticleRequest req)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Makale eklemek için yönetici olmalısınız.");
+        if (!IsSupport) return Forbidden("Makale eklemek için destek ekibinde olmalısınız.");
         var a = new Article { Title = req.Title, Body = req.Body, Category = req.Category ?? "Diğer" };
         Db.Articles.Add(a);
         await Db.SaveChangesAsync();
@@ -58,7 +58,7 @@ public class KbController : ApiControllerBase
     [HttpPut("kb/articles/{id:guid}")]
     public async Task<IActionResult> UpdateArticle(Guid id, CreateArticleRequest req)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Makale düzenlemek için yönetici olmalısınız.");
+        if (!IsSupport) return Forbidden("Makale düzenlemek için destek ekibinde olmalısınız.");
         var a = await Db.Articles.FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return NotFound();
         a.Title = req.Title; a.Body = req.Body; a.Category = req.Category ?? a.Category;
@@ -70,7 +70,7 @@ public class KbController : ApiControllerBase
     [HttpPost("kb/articles/{id:guid}/publish")]
     public async Task<IActionResult> Publish(Guid id, [FromQuery] bool published = true)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Yayınlamak için yönetici olmalısınız.");
+        if (!IsSupport) return Forbidden("Yayınlamak için destek ekibinde olmalısınız.");
         var a = await Db.Articles.FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return NotFound();
         a.Published = published;

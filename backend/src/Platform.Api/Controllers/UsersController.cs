@@ -41,7 +41,7 @@ public class UsersController : ApiControllerBase
         if (!email.Contains('@')) return BadRequest(new { message = "Geçerli bir e-posta girin." });
         if (string.IsNullOrWhiteSpace(req.FullName)) return BadRequest(new { message = "Ad soyad gerekli." });
         var role = req.Role ?? Roles.Employee;
-        if (role is not (Roles.Employee or Roles.Manager or Roles.Admin)) return BadRequest(new { message = "Geçersiz rol." });
+        if (role is not (Roles.Employee or Roles.Agent or Roles.Manager or Roles.Admin)) return BadRequest(new { message = "Geçersiz rol." });
         if (role == Roles.Admin && MyRole != Roles.Admin) return Forbidden("Admin rolünü sadece Admin verebilir.");
         if (await Db.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == email))
             return Conflict(new { message = "Bu e-posta ile kayıtlı bir kullanıcı var." });
@@ -80,7 +80,7 @@ public class UsersController : ApiControllerBase
     {
         if (!IsManagerOrAdmin) return Forbidden("Yetkiniz yok.");
         if (id == Me) return BadRequest(new { message = "Kendi rolünüzü değiştiremezsiniz." });
-        if (req.Role is not (Roles.Employee or Roles.Manager or Roles.Admin)) return BadRequest(new { message = "Geçersiz rol." });
+        if (req.Role is not (Roles.Employee or Roles.Agent or Roles.Manager or Roles.Admin)) return BadRequest(new { message = "Geçersiz rol." });
         var user = await Db.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (user is null) return NotFound();
         if ((req.Role == Roles.Admin || user.Role == Roles.Admin) && MyRole != Roles.Admin)

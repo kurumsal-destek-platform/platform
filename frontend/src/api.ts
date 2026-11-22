@@ -307,3 +307,9 @@ export interface DigestPreview {
   deflected: number; moneySaved: number; topUnanswered: { question: string; count: number }[]; html: string;
 }
 export interface MailChannelT { supportAddress: string; mailpitInbox: boolean; webhook: boolean; lastCheckAt?: string | null }
+
+// ---- Roller ----
+// Agent = destek uzmanı: tüm ticket kuyruğunu görür/çözer, olayları ve bilgi bankasını yönetir; yönetim ekranlarına girmez.
+export const ROLE_LABEL: Record<string, string> = { Employee: "Çalışan", Agent: "Destek uzmanı", Manager: "Yönetici", Admin: "Admin" };
+export const isSupportRole = (r?: string | null) => r === "Agent" || r === "Manager" || r === "Admin";
+export const isManagerRole = (r?: string | null) => r === "Manager" || r === "Admin";

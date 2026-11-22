@@ -25,6 +25,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
   const { user, logout } = useAuth();
   const { toggle } = useThemeMode();
   const isManager = user?.role === "Manager" || user?.role === "Admin";
+  const isSupport = isManager || user?.role === "Agent";
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
@@ -44,10 +45,14 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     const pages: [string, string, string?][] = [
       ["/", "Sizin için", "ana sayfa"], ["/projects", "Projeler"], ["/tickets", "Ticketlar"], ["/kb", "Bilgi bankası", "makale"],
       ["/assistant", "Asistan", "yapay zeka soru"], ["/profile", "Profil", "şifre"],
+      ...(isSupport ? [
+        ["/tickets?tab=all", "Tüm ticketlar", "kuyruk destek"], ["/incidents", "Büyük olaylar", "incident"], ["/insights/gaps", "Bilgi boşlukları", "radar"],
+        ["/tickets?sla=breached", "SLA'sı aşılan ticketlar"],
+      ] as [string, string, string?][] : []),
       ...(isManager ? [
         ["/dashboard", "Gösterge paneli"], ["/performance", "Performans", "sla memnuniyet csat"], ["/performance?tab=savings", "Tasarruf paneli", "roi tl saat"],
-        ["/incidents", "Büyük olaylar", "incident"], ["/insights/gaps", "Bilgi boşlukları", "radar"], ["/users", "Kullanıcılar", "davet"],
-        ["/settings", "Hedefler ve varsayımlar", "sla mesai ayar"], ["/system", "Sistem durumu", "sağlık health"], ["/system?tab=audit", "Denetim kaydı", "audit log kvkk"], ["/tickets?sla=breached", "SLA'sı aşılan ticketlar"],
+        ["/users", "Kullanıcılar", "davet"],
+        ["/settings", "Hedefler ve varsayımlar", "sla mesai ayar"], ["/system", "Sistem durumu", "sağlık health"], ["/system?tab=audit", "Denetim kaydı", "audit log kvkk"]
       ] as [string, string, string?][] : []),
     ];
     return [
@@ -58,7 +63,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
       ...pages.map(([to, label, kw]) => ({ id: to, group: "Git", label, icon: <GoIcon fontSize="small" />, run: go(to), keywords: kw })),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isManager]);
+  }, [isManager, isSupport]);
 
   const items: Cmd[] = useMemo(() => {
     const t = text.toLocaleLowerCase("tr");

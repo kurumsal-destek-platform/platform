@@ -18,6 +18,7 @@ export default function WelcomeTour() {
   useEffect(() => { if (user && !seen(user.id)) setOpen(true); }, [user]);
   if (!user) return null;
   const isManager = user.role === "Manager" || user.role === "Admin";
+  const isAgent = user.role === "Agent";
   const first = user.fullName.split(" ")[0];
 
   const steps: Step[] = [
@@ -25,6 +26,7 @@ export default function WelcomeTour() {
     { emoji: "📸", title: "Sorununuzu anlatmanın en hızlı yolu", body: <>Ticket açarken hata ekranının görüntüsünü <b>Ctrl+V</b> ile yapıştırın; hata mesajını biz okuruz. Çoğu sorunu <b>“Adım adım çözelim”</b> sihirbazıyla ticket açmadan birkaç dakikada çözersiniz.</> },
     { emoji: "✨", title: "Asistan 7/24 yanınızda", body: "Asistan sadece şirketinizin bilgi bankasından cevap verir ve kaynağını gösterir. Bilmediği bir şeyi uydurmaz; size ticket açmayı önerir." },
     { emoji: "⌨️", title: "Her şey bir tuş uzağınızda", body: <><b>{shortcutLabel}</b> ile komut paleti açılır: sayfalar, işlemler, ticket ve makale arama. Yazı alanında değilken <b>C</b> tuşu yeni ticket açar.</> },
+    ...(isAgent ? [{ emoji: "🎧", title: "Destek uzmanı için", body: <><b>Ticketlar → Tüm ticketlar</b> sekmesi firmanın tüm kuyruğudur: atanmamış ticket'ları üstlenin, SLA'sı dolmak üzere olanlara öncelik verin. Yeni ticket'lar bildirim olarak gelir.</> }] : []),
     ...(isManager ? [{ emoji: "📊", title: "Yönetici için", body: <><b>Performans</b> sayfasında SLA uyumu, memnuniyet ve self-servis tasarrufu (TL) var. <b>Büyük olaylar</b> ticket sellerini tek yerden yönetir, <b>Bilgi boşlukları</b> eksik makaleleri bulur.</> }] : []),
   ];
   const close = () => { markSeen(user.id); setOpen(false); setI(0); };

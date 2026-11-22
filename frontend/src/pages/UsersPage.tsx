@@ -12,6 +12,7 @@ import { Person } from "../components/common";
 
 const ROLES = [
   { key: "Employee", label: "Çalışan" },
+  { key: "Agent", label: "Destek uzmanı" },
   { key: "Manager", label: "Yönetici" },
   { key: "Admin", label: "Admin" },
 ];

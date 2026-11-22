@@ -63,7 +63,7 @@ public class TicketAssistController : ApiControllerBase
             {
                 t.Id, t.Title, t.Status, t.Category, t.CreatedAt, similarity = Math.Round(h.Sim, 2), mine,
                 // Çalışan başkasının ticket detayını göremez; sadece başlığı ve durumu görür
-                canOpen = mine || IsManagerOrAdmin || t.AssigneeId == Me,
+                canOpen = mine || IsSupport || t.AssigneeId == Me,
                 assigneeName = t.AssigneeId is Guid a ? names.GetValueOrDefault(a) : null,
                 t.IncidentId,
             };

@@ -51,6 +51,11 @@ describe("Ticket filtreleri adres çubuğunda", () => {
     const f = { tab: "all" as const, q: "vpn", sla: "all" as const, open: true, page: 3 };
     expect(readTicketFilters(writeTicketFilters(f), true)).toEqual(f);
   });
+  it("destek ekibi varsayılan olarak kuyruğu, çalışan kendi ticketlarını görür", () => {
+    expect(readTicketFilters(new URLSearchParams(""), true).tab).toBe("all");
+    expect(readTicketFilters(new URLSearchParams("tab=mine"), true).tab).toBe("mine");
+    expect(readTicketFilters(new URLSearchParams(""), false).tab).toBe("mine");
+  });
   it("SLA filtresi açık ticketları gösterir; yönetici değilse 'Tüm ticketlar' açılmaz", () => {
     const p = new URLSearchParams("sla=breached&tab=all");
     expect(readTicketFilters(p, true)).toMatchObject({ tab: "all", sla: "breached", open: true });
@@ -58,7 +63,7 @@ describe("Ticket filtreleri adres çubuğunda", () => {
   });
   it("diyalog parametresi korunur", () => {
     const keep = new URLSearchParams("open=abc");
-    expect(writeTicketFilters({ tab: "mine", q: "", sla: "all", open: false, page: 1 }, keep).toString()).toBe("open=abc");
+    expect(writeTicketFilters({ tab: "all", q: "", sla: "all", open: false, page: 1 }, keep).toString()).toBe("open=abc");
   });
 });
 

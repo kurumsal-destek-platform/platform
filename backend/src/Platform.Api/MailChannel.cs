@@ -98,7 +98,7 @@ public class MailProcessor
             var ids = await _db.Tickets.IgnoreQueryFilters().Where(t => t.TenantId == tid).Select(t => t.Id).ToListAsync(ct);
             var id = ids.FirstOrDefault(x => x.ToString("N").StartsWith(tag));
             var t = id == Guid.Empty ? null : await _db.Tickets.IgnoreQueryFilters().FirstAsync(x => x.Id == id, ct);
-            var isSupport = user.Role is Roles.Manager or Roles.Admin || t?.AssigneeId == user.Id;
+            var isSupport = user.Role is Roles.Agent or Roles.Manager or Roles.Admin || t?.AssigneeId == user.Id;
             if (t is not null && (t.ReporterId == user.Id || isSupport))
             {
                 if (body.Length == 0) return "ignored:empty";

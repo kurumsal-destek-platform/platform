@@ -249,28 +249,44 @@ def _():
 def _():
     w = S.get("rag", {}).get("warmup") or {}
     if w.get("state") != "done":
-        return WARN, f"ısıtma sürüyor ({w.get('state', '?')}); 1-2 dk sonra tekrar deneyin"
+        return (
+            WARN,
+            f"ısıtma sürüyor ({w.get('state', '?')}); 1-2 dk sonra tekrar deneyin",
+        )
     if not (w.get("embed") and w.get("llm")):
-        return WARN, f"modeller yüklenemedi: {w.get('detail')} → 'ollama list' ile modelleri kontrol edin"
-    return OK, f"modeller bellekte · {w.get('tenants', 0)} firma indekslendi · {w.get('seconds')} sn"
+        return (
+            WARN,
+            f"modeller yüklenemedi: {w.get('detail')} → 'ollama list' ile modelleri kontrol edin",
+        )
+    return (
+        OK,
+        f"modeller bellekte · {w.get('tenants', 0)} firma indekslendi · {w.get('seconds')} sn",
+    )
 
 
 @check("Asistan: takip sorusu (sohbet bağlamı)")
 def _():
     first = "VPN programını yeni bilgisayara nasıl kurarım"
     a = c.post(
-        f"{API}/api/assistant/ask", headers=H(S["tok"]), json={"question": first}, timeout=120
+        f"{API}/api/assistant/ask",
+        headers=H(S["tok"]),
+        json={"question": first},
+        timeout=120,
     ).json()
     r = c.post(
         f"{API}/api/assistant/ask",
         headers=H(S["tok"]),
         json={
             "question": "peki Mac'te?",
-            "history": [{"question": first, "answer": a.get("answer") or a.get("message")}],
+            "history": [
+                {"question": first, "answer": a.get("answer") or a.get("message")}
+            ],
         },
         timeout=120,
     ).json()
-    assert "followup" in r, "RAG takip sorusunu tanımadı (RAG servisi kapalı mı, yedek aramaya mı düşüldü?)"
+    assert "followup" in r, (
+        "RAG takip sorusunu tanımadı (RAG servisi kapalı mı, yedek aramaya mı düşüldü?)"
+    )
     used = r.get("question_used", "?")
     if r.get("rewrite_mode") != "llm":
         return WARN, f'yapay zekâsız birleştirme: "{used[:50]}" (Ollama kapalı/yavaş)'
@@ -282,7 +298,10 @@ def _():
     r = c.post(
         f"{API}/api/tickets/similar",
         headers=H(S["tok"]),
-        json={"title": "VPN'e bağlanamıyorum", "description": "evden çalışırken bağlantı kurulamıyor"},
+        json={
+            "title": "VPN'e bağlanamıyorum",
+            "description": "evden çalışırken bağlantı kurulamıyor",
+        },
         timeout=120,
     )
     assert r.status_code == 200, f"HTTP {r.status_code}"
@@ -299,7 +318,10 @@ def _():
     r = c.post(
         f"{API}/api/tickets/suggest-triage",
         headers=H(S["tok"]),
-        json={"title": "Yazıcı kağıt sıkıştırıyor", "description": "2. kattaki yazıcı sürekli kağıt sıkıştırıyor"},
+        json={
+            "title": "Yazıcı kağıt sıkıştırıyor",
+            "description": "2. kattaki yazıcı sürekli kağıt sıkıştırıyor",
+        },
         timeout=120,
     )
     assert r.status_code == 200, f"HTTP {r.status_code}"
@@ -307,8 +329,8 @@ def _():
     s = j.get("suggestion")
     assert s and s.get("category"), "öneri gelmedi (geçmişte benzer ticket yok mu?)"
     return (OK if j["mode"] == "semantic" else WARN), (
-        f'mod: {j["mode"]} · kategori: {s["category"]} (%{round(100 * s["categoryConfidence"])}) · '
-        f'öncelik: {s["priority"]} · {s["basedOn"]} benzer ticket'
+        f"mod: {j['mode']} · kategori: {s['category']} (%{round(100 * s['categoryConfidence'])}) · "
+        f"öncelik: {s['priority']} · {s['basedOn']} benzer ticket"
     )
 
 
@@ -441,6 +463,27 @@ def _():
     leaked = [x["title"] for x in s["results"] if "Anka" in x.get("snippet", "")]
     assert not leaked, f"Mavi'nin aramasında Anka içeriği: {leaked}"
     return OK, f"Mavi {len(mavi_tickets)} ticket görüyor, Anka verisine erişemiyor"
+
+
+@check("Destek uzmanı tüm kuyruğu görüyor (Ali)")
+def _():
+    tok, me = login("ali@anka.com")
+    if me["role"] != "Agent":
+        return WARN, (
+            f"Ali'nin rolü '{me['role']}'. Eski veritabanı: Kullanıcılar sayfasından rolünü "
+            "'Destek uzmanı' yapın ya da docker compose down -v ile sıfırlayın"
+        )
+    r = c.get(f"{API}/api/tickets", params={"page": 1, "pageSize": 5}, headers=H(tok))
+    assert r.status_code == 200, f"tüm ticketlar açılmadı: HTTP {r.status_code}"
+    total = r.json()["total"]
+    assert total == len(S["tickets"]), (
+        f"Ali {total} ticket görüyor, toplam {len(S['tickets'])}"
+    )
+    d = c.get(f"{API}/api/dashboard/summary", headers=H(tok))
+    assert d.status_code == 403, (
+        f"destek uzmanı yönetici panelini açabildi: HTTP {d.status_code}"
+    )
+    return OK, f"{total} ticket görüyor · yönetim ekranları kapalı (403)"
 
 
 @check("Çalışan, yönetici sayfasına giremiyor")

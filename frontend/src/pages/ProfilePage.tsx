@@ -9,7 +9,7 @@ import { PasswordField, PasswordStrength, passwordOk } from "./AuthPages";
 import { MyBadges } from "../components/Badges";
 import { resetTour } from "../components/WelcomeTour";
 
-const ROLE_TR: Record<string, string> = { Employee: "Çalışan", Manager: "Yönetici", Admin: "Admin" };
+const ROLE_TR: Record<string, string> = { Employee: "Çalışan", Agent: "Destek uzmanı", Manager: "Yönetici", Admin: "Admin" };
 
 export default function ProfilePage() {
   const { user, setSession, logout } = useAuth();
