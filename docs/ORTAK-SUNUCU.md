@@ -26,7 +26,7 @@ Farklı evlerde/ağlarda olsanız da bilgisayarları özel bir ağda birleştiri
 2. Sunucu bilgisayarda Tailscale simgesi → **My IP** (ör. `100.101.102.103`). Bu takımın adresidir.
 3. Sunucu bilgisayarda, **yönetici olarak açılmış** PowerShell'de bir kez:
    ```powershell
-   New-NetFirewallRule -DisplayName "Destek Platformu" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow
+   New-NetFirewallRule -DisplayName "ESENN" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow
    ```
 
 > Aynı Wi-Fi'deyseniz Tailscale gerekmez: sunucunun yerel IP'sini (`ipconfig` → IPv4, ör. `192.168.1.25`) kullanın.

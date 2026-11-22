@@ -8,7 +8,7 @@ import { TypeIcon } from "./common";
 // Jira "Timeline" benzeri basit Gantt: epic'ler ve altındaki işler, başlangıç→bitiş çubukları
 const DAY = 86400000;
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const BAR_COLOR: Record<string, string> = { todo: "#8993a4", in_progress: "#0052cc", in_review: "#6554c0", done: "#36b37e" };
+const BAR_COLOR: Record<string, string> = { todo: "#9aa5a1", in_progress: "#1d6b63", in_review: "#c98a17", done: "#3d8b5a" };
 
 function range(w: WorkItem): { s: Date; e: Date; estimated: boolean } {
   const s = startOfDay(new Date(w.startDate ?? w.createdAt));
@@ -111,11 +111,11 @@ export default function TimelineView({ items, onOpen }: { items: WorkItem[]; onO
             {ticks.map((t) => (
               <Box key={`l${t.x}`} sx={{ position: "absolute", left: t.x, top: 32, bottom: 0, borderLeft: "1px dashed", borderColor: "divider" }} />
             ))}
-            <Box sx={{ position: "absolute", left: todayX, top: 0, bottom: 0, width: 2, bgcolor: "#ff5630", zIndex: 2 }} title="Bugün" />
+            <Box sx={{ position: "absolute", left: todayX, top: 0, bottom: 0, width: 2, bgcolor: "#e0694a", zIndex: 2 }} title="Bugün" />
             {rows.map(({ w }) => {
               const r = range(w);
               const left = x(r.s), width = Math.max(dayW, x(r.e) - left + dayW);
-              const color = BAR_COLOR[w.status] ?? "#8993a4";
+              const color = BAR_COLOR[w.status] ?? "#9aa5a1";
               return (
                 <Box key={w.id} sx={{ height: ROW, position: "relative", borderBottom: 1, borderColor: "divider" }}>
                   <Tooltip title={`${w.key} · ${statusLabel(w.status)} · ${r.s.toLocaleDateString("tr-TR")} → ${r.estimated ? "bitiş yok" : r.e.toLocaleDateString("tr-TR")}`}>

@@ -236,7 +236,7 @@ function Column({ id, title, count, children }: { id: string; title: string; cou
     <Box ref={setNodeRef} sx={{
       // Sütun rengi temaya göre (önceden koyu renk sabitti; açık temada kartlar koyu zemine düşüyordu)
       width: 280, flexShrink: 0, borderRadius: 2, p: 1.5, minHeight: 300, transition: "background-color .15s",
-      bgcolor: (t) => isOver ? (t.palette.mode === "dark" ? "#22272b" : "#e9f2ff") : (t.palette.mode === "dark" ? "#161a1d" : "#f1f2f4"),
+      bgcolor: (t) => isOver ? (t.palette.mode === "dark" ? "#22302e" : "#e3f0ed") : (t.palette.mode === "dark" ? "#111817" : "#ece9e1"),
       outline: isOver ? "2px dashed" : "none", outlineColor: "primary.main",
     }}>
       <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", textTransform: "uppercase" }}>
@@ -255,7 +255,7 @@ function BoardCard({ item, canDrag, onOpen }: { item: WorkItem; canDrag: boolean
       sx={{ p: 1.5, cursor: canDrag ? "grab" : "pointer", opacity: isDragging ? 0.7 : 1,
         // Üzerine gelince kart zemini değişmez (yarı saydam renk koyu sütunu gösteriyordu); hafif gölge ve kenar verilir
         transition: "box-shadow .15s, border-color .15s", "&:hover": { boxShadow: 3, borderColor: "primary.main" },
-        borderLeft: isOverdue(item) ? "3px solid #f87168" : undefined }}>
+        borderLeft: isOverdue(item) ? "3px solid #c9483b" : undefined }}>
       <Typography variant="body2" sx={{ mb: 1 }}>{item.title}</Typography>
       {(item.labels?.length ?? 0) > 0 && <Box sx={{ mb: 1 }}><LabelChips labels={item.labels} /></Box>}
       {item.dueDate && <Box sx={{ mb: 1 }}><DueDate item={item} short /></Box>}

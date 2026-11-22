@@ -5,8 +5,8 @@ import { Alert, Box, Card, CardContent, LinearProgress, Stack, Typography } from
 import { api, statusLabel, TICKET_STATUSES, type Dashboard } from "../api";
 
 const STATUS_COLORS: Record<string, string> = {
-  todo: "#8c9bab", in_progress: "#579dff", in_review: "#f5cd47", done: "#4bce97",
-  open: "#f87168", assigned: "#f5cd47", resolved: "#4bce97", closed: "#8c9bab",
+  todo: "#9aa5a1", in_progress: "#1d6b63", in_review: "#d9a23a", done: "#3d8b5a",
+  open: "#e0694a", assigned: "#d9a23a", resolved: "#3d8b5a", closed: "#9aa5a1",
 };
 
 // Yönetici gösterge paneli: grafik kütüphanesi olmadan, basit çubuklarla
@@ -25,10 +25,10 @@ export default function DashboardPage() {
       {/* Üst kartlar */}
       <Stack direction="row" sx={{ flexWrap: "wrap", gap: 2, mb: 2 }}>
         <Kpi label="Açık iş öğesi" value={d.workItems.total - (d.workItems.byStatus.find((s) => s.status === "done")?.count ?? 0)} />
-        <Kpi label="Geciken" value={d.workItems.overdue} tone={d.workItems.overdue ? "#f87168" : undefined} />
+        <Kpi label="Geciken" value={d.workItems.overdue} tone={d.workItems.overdue ? "#e0694a" : undefined} />
         <Kpi label="Açık ticket" value={d.tickets.open} />
         <Kpi label="Ort. çözüm süresi" value={d.tickets.avgResolutionHours == null ? "—" : `${d.tickets.avgResolutionHours} sa`} />
-        <Kpi label="Ticket açmadan çözülen" value={`%${d.selfService.deflectionRate}`} tone="#4bce97"
+        <Kpi label="Ticket açmadan çözülen" value={`%${d.selfService.deflectionRate}`} tone="#3d8b5a"
           sub={`${d.selfService.solvedWithoutTicket} kişi bilgi bankasıyla çözdü`} />
       </Stack>
 

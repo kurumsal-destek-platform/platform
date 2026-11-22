@@ -31,7 +31,7 @@ export function SlaChip({ sla, compact }: { sla?: SlaInfo; compact?: boolean }) 
   const label = kind === "response" ? "Yanıt" : "Çözüm";
 
   if (sla.resolution === "paused" || state === "paused")
-    return <Chip size="small" color="info" variant="outlined" icon={<PauseIcon />} label={compact ? "Durdu" : "⏸ Yanıt bekleniyor — süre durdu"} />;
+    return <Chip size="small" color="info" variant="outlined" icon={<PauseIcon />} label={compact ? "Durdu" : "Yanıt bekleniyor · süre durdu"} />;
   if (state === "met") return <Chip size="small" color="success" variant="outlined" icon={<CheckIcon />} label={compact ? "Hedefte" : "SLA hedefinde"} />;
   if (!due) return null;
   const mins = (new Date(due).getTime() - now) / 60000;

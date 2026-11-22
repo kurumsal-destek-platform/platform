@@ -3,6 +3,7 @@ import { Alert, Avatar, Box, Button, Card, Chip, LinearProgress, Skeleton, Stack
 import AutoIcon from "@mui/icons-material/AutoAwesome";
 import { api, errorMessage, type AssignSuggestion, type Ticket } from "../api";
 import { initials } from "./Layout";
+import { avatarColor } from "../theme";
 
 // "Bunu en iyi kim çözer?" — geçmiş çözümler + hız + mevcut iş yükü
 export default function SmartAssign({ ticket, onAssigned }: { ticket: Ticket; onAssigned: (name: string) => void }) {
@@ -37,7 +38,7 @@ export default function SmartAssign({ ticket, onAssigned }: { ticket: Ticket; on
           return (
             <Card key={s.userId} variant="outlined" sx={{ flex: 1, p: 1.5, borderColor: s.best ? "primary.main" : undefined, borderWidth: s.best ? 2 : 1 }}>
               <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <Avatar sx={{ width: 30, height: 30, fontSize: 12, bgcolor: "#f79233" }}>{initials(s.fullName)}</Avatar>
+                <Avatar sx={{ width: 30, height: 30, fontSize: 12, bgcolor: avatarColor(s.fullName) }}>{initials(s.fullName)}</Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{s.fullName}</Typography>
                   {s.best && <Chip size="small" color="primary" label="En uygun" sx={{ height: 18, fontSize: 11 }} />}

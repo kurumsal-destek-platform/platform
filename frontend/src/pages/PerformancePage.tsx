@@ -102,9 +102,9 @@ function Quality({ days }: { days: number }) {
         <Card variant="outlined">
           <CardContent>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Puan dağılımı</Typography>
-            <HBars color="#f5a623" labelWidth={110} rows={[...d.csat.distribution].reverse().map((r) => ({ label: <Rating size="small" value={r.rating} readOnly max={5} />, value: r.count }))} />
+            <HBars color="#d9a23a" labelWidth={110} rows={[...d.csat.distribution].reverse().map((r) => ({ label: <Rating size="small" value={r.rating} readOnly max={5} />, value: r.count }))} />
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mt: 3, mb: 1 }}>Haftalık ortalama puan</Typography>
-            <TrendLine labels={d.trend.map((t) => weekLabel(t.week))} values={d.trend.map((t) => t.csat)} min={1} max={5} color="#f5a623" />
+            <TrendLine labels={d.trend.map((t) => weekLabel(t.week))} values={d.trend.map((t) => t.csat)} min={1} max={5} color="#d9a23a" />
           </CardContent>
         </Card>
         <Card variant="outlined">
@@ -141,7 +141,7 @@ function Quality({ days }: { days: number }) {
                   <TableCell align="right">{a.resolved}</TableCell>
                   <TableCell align="right"><Box component="span" sx={{ color: pctColor(a.slaPct), fontWeight: 600 }}>%{a.slaPct}</Box></TableCell>
                   <TableCell align="right">{formatDuration(a.medianHours * 60)}</TableCell>
-                  <TableCell align="right">{a.csat ? <Chip size="small" icon={<StarIcon sx={{ color: "#f5a623 !important" }} />} label={a.csat.toFixed(1)} /> : "—"}</TableCell>
+                  <TableCell align="right">{a.csat ? <Chip size="small" icon={<StarIcon sx={{ color: "#d9a23a !important" }} />} label={a.csat.toFixed(1)} /> : "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -204,7 +204,7 @@ function Savings({ days }: { days: number }) {
         <Card variant="outlined">
           <CardContent>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>En çok işe yarayan makaleler</Typography>
-            <HBars color="#36b37e" labelWidth={170} rows={d.topArticles.map((a) => ({ label: <span title={a.title}>{a.title}</span>, value: a.solved }))} />
+            <HBars color="#3d8b5a" labelWidth={170} rows={d.topArticles.map((a) => ({ label: <span title={a.title}>{a.title}</span>, value: a.solved }))} />
             <Button size="small" sx={{ mt: 2 }} onClick={() => nav("/insights/gaps")}>Eksik makaleleri bul →</Button>
           </CardContent>
         </Card>

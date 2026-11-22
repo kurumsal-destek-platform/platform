@@ -1,5 +1,5 @@
 """
-RAG servisi v2 — Kurumsal Destek Platformu
+RAG servisi v2 — ESENN
 
 Akış:
   1) İndeksleme: firmanın yayınlanmış makaleleri parçalara bölünür, her parça vektöre çevrilir ve

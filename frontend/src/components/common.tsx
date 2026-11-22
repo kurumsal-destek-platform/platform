@@ -1,4 +1,4 @@
-import { Avatar, Chip, Stack, Typography } from "@mui/material";
+import { Avatar, Chip, Stack, Typography, alpha } from "@mui/material";
 import BookmarkIcon from "@mui/icons-material/Bookmark";
 import CheckBoxIcon from "@mui/icons-material/CheckBox";
 import BugIcon from "@mui/icons-material/BugReport";
@@ -6,15 +6,16 @@ import BoltIcon from "@mui/icons-material/Bolt";
 import SubIcon from "@mui/icons-material/SubdirectoryArrowRight";
 import { isOverdue, PRIORITIES, statusLabel } from "../api";
 import { initials } from "./Layout";
+import { avatarColor } from "../theme";
 
 export function TypeIcon({ type }: { type: string }) {
   const sx = { fontSize: 18 };
   switch (type) {
-    case "Epic": return <BoltIcon sx={{ ...sx, color: "#9f8fef" }} />;
-    case "Story": return <BookmarkIcon sx={{ ...sx, color: "#94c748" }} />;
-    case "Bug": return <BugIcon sx={{ ...sx, color: "#f87168" }} />;
-    case "Subtask": return <SubIcon sx={{ ...sx, color: "#579dff" }} />;
-    default: return <CheckBoxIcon sx={{ ...sx, color: "#579dff" }} />;
+    case "Epic": return <BoltIcon sx={{ ...sx, color: "#8a5a9e" }} />;
+    case "Story": return <BookmarkIcon sx={{ ...sx, color: "#4f8a4a" }} />;
+    case "Bug": return <BugIcon sx={{ ...sx, color: "#c9483b" }} />;
+    case "Subtask": return <SubIcon sx={{ ...sx, color: "#3b78a8" }} />;
+    default: return <CheckBoxIcon sx={{ ...sx, color: "#3b78a8" }} />;
   }
 }
 
@@ -26,14 +27,14 @@ export function StatusChip({ status }: { status: string }) {
 }
 
 export function PriorityText({ p }: { p: string }) {
-  const color = p === "Critical" ? "#f87168" : p === "High" ? "#f5cd47" : "text.secondary";
+  const color = p === "Critical" ? "error.main" : p === "High" ? "warning.main" : "text.secondary";
   return <Typography variant="body2" sx={{ color }}>{PRIORITIES[p] ?? p}</Typography>;
 }
 
 export function Person({ name }: { name?: string | null }) {
   return (
     <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-      <Avatar sx={{ width: 24, height: 24, fontSize: 11, bgcolor: name ? "#f79233" : "grey.700" }}>
+      <Avatar sx={{ width: 24, height: 24, fontSize: 11, bgcolor: avatarColor(name) }}>
         {name ? initials(name) : "?"}
       </Avatar>
       <Typography variant="body2" color={name ? "text.primary" : "text.secondary"}>{name ?? "Atanmadı"}</Typography>
@@ -46,7 +47,7 @@ export function LabelChips({ labels, max = 3 }: { labels?: string[]; max?: numbe
   return (
     <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5 }}>
       {labels.slice(0, max).map((l) => (
-        <Chip key={l} label={l} size="small" sx={{ height: 20, fontSize: 11, bgcolor: "rgba(87,157,255,0.15)", color: "#85b8ff" }} />
+        <Chip key={l} label={l} size="small" sx={{ height: 20, fontSize: 11, bgcolor: (t) => alpha(t.palette.info.main, 0.12), color: "info.main" }} />
       ))}
       {labels.length > max && <Typography variant="caption" color="text.secondary">+{labels.length - max}</Typography>}
     </Stack>
@@ -60,7 +61,7 @@ export function DueDate({ item, short }: { item: { dueDate?: string | null; stat
   const text = new Date(item.dueDate).toLocaleDateString("tr-TR", short ? { day: "numeric", month: "short" } : undefined);
   return (
     <Typography variant={short ? "caption" : "body2"}
-      sx={{ color: late ? "#f87168" : "text.secondary", fontWeight: late ? 600 : 400 }}>
+      sx={{ color: late ? "error.main" : "text.secondary", fontWeight: late ? 600 : 400 }}>
       {late ? "⚠ " : ""}{text}{late && !short ? " (gecikti)" : ""}
     </Typography>
   );

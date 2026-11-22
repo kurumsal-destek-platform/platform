@@ -8,6 +8,7 @@ import { initials } from "../components/Layout";
 import { PasswordField, PasswordStrength, passwordOk } from "./AuthPages";
 import { MyBadges } from "../components/Badges";
 import { resetTour } from "../components/WelcomeTour";
+import { avatarColor } from "../theme";
 
 const ROLE_TR: Record<string, string> = { Employee: "Çalışan", Agent: "Destek uzmanı", Manager: "Yönetici", Admin: "Admin" };
 
@@ -60,7 +61,7 @@ export default function ProfilePage() {
       <Card variant="outlined" sx={{ mb: 2 }}>
         <CardContent>
           <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-            <Avatar sx={{ width: 56, height: 56, bgcolor: "#f79233" }}>{initials(user?.fullName)}</Avatar>
+            <Avatar sx={{ width: 56, height: 56, bgcolor: avatarColor(user?.fullName) }}>{initials(user?.fullName)}</Avatar>
             <Box>
               <Typography variant="h6">{user?.fullName}</Typography>
               <Typography variant="body2" color="text.secondary">{user?.email}</Typography>

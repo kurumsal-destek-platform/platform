@@ -71,7 +71,7 @@ public class UsersController : ApiControllerBase
         var token = await AuthTokens.IssueAsync(Db, user.Id, TokenPurposes.Invite, TimeSpan.FromDays(7));
         await Db.SaveChangesAsync();
         var tenant = await Db.Tenants.FindAsync(user.TenantId);
-        await _mail.SendAsync(user.Email, $"{tenant?.Name} sizi Destek Platformu'na davet etti",
+        await _mail.SendAsync(user.Email, $"{tenant?.Name} sizi ESENN'e davet etti",
             EmailTemplates.Invite(user.FullName, tenant?.Name ?? "", inviter,
                 AuthTokens.FrontendUrl(_cfg, $"/accept-invite?token={token}")));
     }

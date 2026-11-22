@@ -65,7 +65,7 @@ def H(tok: str) -> dict:
     return {"Authorization": f"Bearer {tok}"}
 
 
-print("\nDestek Platformu — otomatik kontrol\n" + "-" * 78)
+print("\nESENN — otomatik kontrol\n" + "-" * 78)
 S: dict = {}
 
 

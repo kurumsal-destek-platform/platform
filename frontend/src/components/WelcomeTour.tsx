@@ -22,7 +22,7 @@ export default function WelcomeTour() {
   const first = user.fullName.split(" ")[0];
 
   const steps: Step[] = [
-    { emoji: "👋", title: `Hoş geldiniz, ${first}!`, body: "Destek Platformu; sorun bildirmeyi, takip etmeyi ve çözmeyi tek yerde toplar. 30 saniyelik kısa bir tur yapalım." },
+    { emoji: "👋", title: `Hoş geldiniz, ${first}!`, body: "ESENN; sorun bildirmeyi, takip etmeyi ve çözmeyi tek yerde toplar. 30 saniyelik kısa bir tur yapalım." },
     { emoji: "📸", title: "Sorununuzu anlatmanın en hızlı yolu", body: <>Ticket açarken hata ekranının görüntüsünü <b>Ctrl+V</b> ile yapıştırın; hata mesajını biz okuruz. Çoğu sorunu <b>“Adım adım çözelim”</b> sihirbazıyla ticket açmadan birkaç dakikada çözersiniz.</> },
     { emoji: "✨", title: "Asistan 7/24 yanınızda", body: "Asistan sadece şirketinizin bilgi bankasından cevap verir ve kaynağını gösterir. Bilmediği bir şeyi uydurmaz; size ticket açmayı önerir." },
     { emoji: "⌨️", title: "Her şey bir tuş uzağınızda", body: <><b>{shortcutLabel}</b> ile komut paleti açılır: sayfalar, işlemler, ticket ve makale arama. Yazı alanında değilken <b>C</b> tuşu yeni ticket açar.</> },

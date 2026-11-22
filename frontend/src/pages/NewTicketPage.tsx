@@ -153,7 +153,7 @@ export default function NewTicketPage() {
           Etkilenenler listesine eklendiniz. Ekip bu sorun üzerinde çalışıyor; çözüldüğünde size otomatik bildirim gelecek.
           Ayrıca bir şey yapmanıza gerek yok.
         </Alert>
-        <Button variant="contained" onClick={() => nav("/tickets")}>Ticketlarıma git</Button>
+        <Button variant="contained" onClick={() => nav("/tickets")}>Taleplerime git</Button>
       </Box>
     );
 

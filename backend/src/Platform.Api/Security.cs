@@ -53,7 +53,7 @@ public static class EmailTemplates
 {
     private static string Layout(string title, string body, string buttonText, string url) => $"""
         <div style="font-family:Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;padding:24px;color:#172b4d">
-          <h2 style="margin:0 0 16px">◆ Destek Platformu</h2>
+          <h2 style="margin:0 0 16px">ESENN</h2>
           <h3 style="margin:0 0 12px">{title}</h3>
           <p style="line-height:1.5">{body}</p>
           <p style="margin:24px 0"><a href="{url}" style="background:#0c66e4;color:#fff;padding:10px 18px;border-radius:4px;text-decoration:none">{buttonText}</a></p>
@@ -67,7 +67,7 @@ public static class EmailTemplates
 
     public static string Invite(string name, string company, string inviter, string url) =>
         Layout($"{WebUtility.HtmlEncode(company)} sizi davet etti",
-            $"Merhaba {WebUtility.HtmlEncode(name)}, {WebUtility.HtmlEncode(inviter)} sizi Destek Platformu'na davet etti. Hesabınızı etkinleştirmek için şifrenizi oluşturun. Bağlantı 7 gün geçerlidir.",
+            $"Merhaba {WebUtility.HtmlEncode(name)}, {WebUtility.HtmlEncode(inviter)} sizi ESENN'e davet etti. Hesabınızı etkinleştirmek için şifrenizi oluşturun. Bağlantı 7 gün geçerlidir.",
             "Şifremi oluştur", url);
 
     public static string Verify(string name, string url) =>

@@ -46,7 +46,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
       ["/", "Sizin için", "ana sayfa"], ["/projects", "Projeler"], ["/tickets", "Ticketlar"], ["/kb", "Bilgi bankası", "makale"],
       ["/assistant", "Asistan", "yapay zeka soru"], ["/profile", "Profil", "şifre"],
       ...(isSupport ? [
-        ["/tickets?tab=all", "Tüm ticketlar", "kuyruk destek"], ["/incidents", "Büyük olaylar", "incident"], ["/insights/gaps", "Bilgi boşlukları", "radar"],
+        ["/tickets?tab=all", "Tüm talepler", "kuyruk destek"], ["/incidents", "Büyük olaylar", "incident"], ["/insights/gaps", "Bilgi boşlukları", "radar"],
         ["/tickets?sla=breached", "SLA'sı aşılan ticketlar"],
       ] as [string, string, string?][] : []),
       ...(isManager ? [
@@ -56,7 +56,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
       ] as [string, string, string?][] : []),
     ];
     return [
-      { id: "new-ticket", group: "İşlemler", label: "Ticket oluştur", hint: "sorun bildir", icon: <AddIcon fontSize="small" />, run: go("/tickets/new"), keywords: "yeni talep" },
+      { id: "new-ticket", group: "İşlemler", label: "Yeni talep oluştur", hint: "sorun bildir", icon: <AddIcon fontSize="small" />, run: go("/tickets/new"), keywords: "yeni talep" },
       { id: "ask", group: "İşlemler", label: "Asistana sor", icon: <AiIcon fontSize="small" />, run: go("/assistant") },
       { id: "theme", group: "İşlemler", label: "Temayı değiştir", hint: "aydınlık / karanlık", icon: <ThemeIcon fontSize="small" />, run: () => { toggle(); onClose(); }, keywords: "dark light" },
       { id: "logout", group: "İşlemler", label: "Çıkış yap", icon: <GoIcon fontSize="small" />, run: () => { onClose(); logout(); nav("/login"); } },
