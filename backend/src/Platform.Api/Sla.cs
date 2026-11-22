@@ -54,7 +54,53 @@ public static class Sla
         t.ResolutionDueAt = AddBusinessHours(t.CreatedAt, p.ResolutionHours, s);
     }
 
-    public static readonly string[] OpenStatuses = { TicketStatus.Open, TicketStatus.Assigned, TicketStatus.InProgress };
+    public static readonly string[] OpenStatuses = { TicketStatus.Open, TicketStatus.Assigned, TicketStatus.InProgress, TicketStatus.Waiting };
+
+    // a ile b arasındaki mesai saati (yanıt beklenirken geçen süre kadar SLA hedefi ileri kayar)
+    public static double BusinessHoursBetween(DateTime aUtc, DateTime bUtc, TenantSettings s)
+    {
+        if (bUtc <= aUtc) return 0;
+        var days = Days(s);
+        if (days.Count == 0 || s.WorkEndHour <= s.WorkStartHour) return (bUtc - aUtc).TotalHours;
+        var off = TimeSpan.FromHours(s.UtcOffsetHours);
+        var a = aUtc + off; var b = bUtc + off;
+        double total = 0;
+        for (var day = a.Date; day <= b.Date; day = day.AddDays(1))
+        {
+            if (!days.Contains(IsoDay(day))) continue;
+            var start = day.AddHours(s.WorkStartHour); var end = day.AddHours(s.WorkEndHour);
+            var from = a > start ? a : start; var to = b < end ? b : end;
+            if (to > from) total += (to - from).TotalHours;
+        }
+        return total;
+    }
+
+    public static void EnterWaiting(Ticket t, DateTime now) => t.WaitingSince ??= now;
+
+    // Bekleme bitti: geçen mesai süresi kadar hedefleri ileri kaydır
+    public static void LeaveWaiting(Ticket t, DateTime now, TenantSettings s)
+    {
+        if (t.WaitingSince is not DateTime w) return;
+        var h = BusinessHoursBetween(w, now, s);
+        if (h > 0)
+        {
+            if (t.FirstResponseAt is null && t.ResponseDueAt is DateTime r) t.ResponseDueAt = AddBusinessHours(r, h, s);
+            if (t.ResolutionDueAt is DateTime z && !t.SlaBreachNotified) t.ResolutionDueAt = AddBusinessHours(z, h, s);
+            t.SlaWarned = false;
+        }
+        t.WaitingSince = null;
+    }
+
+    // Çalışan cevap yazınca (portal veya e-posta) bekleme biter, ticket işleme döner
+    public static async Task ResumeIfWaitingAsync(AppDbContext db, Ticket t, Guid actorId)
+    {
+        if (t.Status != TicketStatus.Waiting) return;
+        var (_, s) = await LoadAsync(db, t.TenantId, ignoreFilters: true);
+        LeaveWaiting(t, DateTime.UtcNow, s);
+        t.Status = TicketStatus.InProgress;
+        if (t.AssigneeId is Guid a)
+            Events.Notify(db, t.TenantId, a, actorId, "Çalışan yanıt verdi", $"\"{t.Title}\" tekrar işlemde.", $"/tickets?open={t.Id}");
+    }
 
     // Tek bir hedefin durumu: met | breached | running | at_risk | none
     public static string State(DateTime created, DateTime? due, DateTime? doneAt, DateTime now)
@@ -70,6 +116,7 @@ public static class Sla
     // Listeleme filtresi için özet: "breached" | "at_risk" | "ok" (frontend'deki slaOf ile aynı kural)
     public static string Summary(Ticket t, DateTime now)
     {
+        if (t.Status == TicketStatus.Waiting) return "ok";   // süre duruyor
         var resolvedAt = t.Status is TicketStatus.Resolved or TicketStatus.Closed ? t.ResolvedAt ?? now : (DateTime?)null;
         var r = State(t.CreatedAt, t.ResponseDueAt, t.FirstResponseAt ?? resolvedAt, now);
         var z = State(t.CreatedAt, t.ResolutionDueAt, resolvedAt, now);
@@ -85,7 +132,8 @@ public static class Sla
             resolutionDueAt = t.ResolutionDueAt,
             firstResponseAt = t.FirstResponseAt,
             response = State(t.CreatedAt, t.ResponseDueAt, t.FirstResponseAt ?? resolvedAt, now),
-            resolution = State(t.CreatedAt, t.ResolutionDueAt, resolvedAt, now),
+            resolution = t.Status == TicketStatus.Waiting ? "paused" : State(t.CreatedAt, t.ResolutionDueAt, resolvedAt, now),
+            waitingSince = t.WaitingSince,
         };
     }
 
@@ -134,7 +182,7 @@ public class SlaMonitor : BackgroundService
         var gotLock = await db.Database.SqlQueryRaw<bool>("SELECT pg_try_advisory_xact_lock(7342001) AS \"Value\"").FirstAsync(ct);
         if (!gotLock) return;
         var tickets = await db.Tickets.IgnoreQueryFilters()
-            .Where(t => Sla.OpenStatuses.Contains(t.Status) && t.ResolutionDueAt != null && (!t.SlaWarned || !t.SlaBreachNotified))
+            .Where(t => Sla.OpenStatuses.Contains(t.Status) && t.Status != TicketStatus.Waiting && t.ResolutionDueAt != null && (!t.SlaWarned || !t.SlaBreachNotified))
             .ToListAsync(ct);
         if (tickets.Count == 0) { await tx.CommitAsync(ct); return; }
 

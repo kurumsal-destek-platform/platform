@@ -105,6 +105,7 @@ public class MailProcessor
                 _db.TicketMessages.Add(new TicketMessage { TenantId = tid, TicketId = t.Id, AuthorId = user.Id, Body = "📧 " + body });
                 if (t.ReporterId == user.Id)
                 {
+                    await Sla.ResumeIfWaitingAsync(_db, t, user.Id);
                     if (t.Status == TicketStatus.Resolved) t.Status = TicketStatus.InProgress;   // çalışan "hâlâ olmuyor" dedi
                     if (t.AssigneeId is Guid a)
                         Events.Notify(_db, tid, a, user.Id, "Çalışan e-postayla cevap yazdı", $"\"{t.Title}\": {TextUtil.Snip(body, 120)}", $"/tickets?open={t.Id}");

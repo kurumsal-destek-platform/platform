@@ -307,6 +307,43 @@ namespace Platform.Infrastructure.Migrations
                     b.ToTable("AutomationRules");
                 });
 
+            modelBuilder.Entity("Platform.Domain.CannedResponse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Category")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Shared")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("UsageCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CannedResponses");
+                });
+
             modelBuilder.Entity("Platform.Domain.Comment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -727,6 +764,16 @@ namespace Platform.Infrastructure.Migrations
                     b.Property<Guid?>("WorkItemId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("MergedIntoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("WaitingSince")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid[]>("Watchers")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
                     b.HasKey("Id");
 
                     b.ToTable("Tickets");
@@ -775,6 +822,9 @@ namespace Platform.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Department")
+                        .HasColumnType("text");
 
                     b.Property<string>("Email")
                         .IsRequired()

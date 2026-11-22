@@ -14,6 +14,7 @@ import SmartAssign from "./SmartAssign";
 import TicketConversation from "./TicketConversation";
 import { CsatStars, SlaPanel } from "./SlaCsat";
 import { Person } from "./common";
+import { MergeButton, Watchers } from "./TicketExtras";
 
 // Ticket detayı: açıklama, ekler, (yönetici için) göreve çevirme
 export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | null; onClose: () => void }) {
@@ -31,6 +32,7 @@ export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | nul
       <DialogTitle>
         {ticket.title}
         <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap", rowGap: 1 }}>
+          {ticket.mergedIntoId && <Chip size="small" color="secondary" label="Başka ticket ile birleştirildi" onClick={() => { onClose(); nav(`/tickets?open=${ticket.mergedIntoId}`); }} />}
           <Chip size="small" label={ticket.category} />
           <Chip size="small" variant="outlined" label={TICKET_STATUSES[ticket.status] ?? ticket.status} />
           <Chip size="small" variant="outlined" label={PRIORITIES[ticket.priority] ?? ticket.priority} />
@@ -71,6 +73,8 @@ export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | nul
             </>
           )}
           <Divider />
+          <Watchers ticket={ticket} isSupport={isManager} />
+          {isManager && <Box><MergeButton ticket={ticket} onMerged={(id) => { onClose(); nav(`/tickets?open=${id}`); }} /></Box>}
           <TicketConversation ticket={ticket} isSupport={isManager || ticket.assigneeId === user?.id} />          <Divider />
           <Attachments basePath={`/api/tickets/${ticket.id}`} />
           <Divider />

@@ -20,7 +20,7 @@ public class AttachmentsController : ApiControllerBase
 
     public AttachmentsController(AppDbContext db, IConfiguration cfg, ILogger<AttachmentsController> log) : base(db)
     {
-        _dir = cfg["Storage:Uploads"] ?? Path.Combine(AppContext.BaseDirectory, "uploads");
+        _dir = cfg["Uploads:Path"] ?? cfg["Storage:Uploads"] ?? Path.Combine(AppContext.BaseDirectory, "uploads");
         _log = log;
     }
 
@@ -43,7 +43,7 @@ public class AttachmentsController : ApiControllerBase
     private async Task<bool> CanSeeTicketAsync(Guid ticketId)
     {
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == ticketId);
-        return t is not null && (IsSupport || t.ReporterId == Me || t.AssigneeId == Me);
+        return t is not null && (IsSupport || t.ReporterId == Me || t.AssigneeId == Me || t.Watchers.Contains(Me));
     }
 
     private async Task<WorkItem?> ItemIfMemberAsync(string key)

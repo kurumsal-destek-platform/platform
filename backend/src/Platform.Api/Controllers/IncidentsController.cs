@@ -19,7 +19,7 @@ public class IncidentsController : ApiControllerBase
     public const double ClusterThreshold = 0.40;
     public const double MatchThreshold = 0.35;
 
-    private static readonly string[] OpenStatuses = { TicketStatus.Open, TicketStatus.Assigned, TicketStatus.InProgress };
+    private static readonly string[] OpenStatuses = Sla.OpenStatuses;
 
     private async Task<object> DtoAsync(Incident i, Dictionary<Guid, string>? names = null)
     {

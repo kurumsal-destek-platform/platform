@@ -29,7 +29,7 @@ public static class Events
     public static string StatusLabel(string s) => s switch
     {
         "todo" => "Yapılacak", "in_progress" => "Devam ediyor", "in_review" => "İncelemede", "done" => "Tamamlandı",
-        "open" => "Açık", "assigned" => "Atandı", "resolved" => "Çözüldü", "closed" => "Kapandı",
+        "open" => "Açık", "assigned" => "Atandı", "resolved" => "Çözüldü", "closed" => "Kapandı", "waiting" => "Yanıtınız bekleniyor",
         _ => s,
     };
 

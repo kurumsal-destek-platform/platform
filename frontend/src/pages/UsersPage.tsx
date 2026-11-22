@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Menu, MenuItem,
-  Select, Snackbar, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  Autocomplete, Select, Snackbar, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from "@mui/material";
 import MoreIcon from "@mui/icons-material/MoreHoriz";
 import PersonAddIcon from "@mui/icons-material/PersonAddOutlined";
@@ -28,6 +28,8 @@ export default function UsersPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const isAdmin = user?.role === "Admin";
+  const canManage = isAdmin || user?.role === "Manager";
+  const depts = useQuery({ queryKey: ["departments"], queryFn: async () => (await api.get<string[]>("/api/users/departments")).data });
   const [toast, setToast] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [menu, setMenu] = useState<{ el: HTMLElement; u: UserLite } | null>(null);
@@ -59,7 +61,7 @@ export default function UsersPage() {
       <Table size="small" sx={{ bgcolor: "background.paper", minWidth: 720 }}>
         <TableHead>
           <TableRow>
-            <TableCell>Kullanıcı</TableCell><TableCell>E-posta</TableCell><TableCell>Rol</TableCell>
+            <TableCell>Kullanıcı</TableCell><TableCell>E-posta</TableCell><TableCell>Rol</TableCell><TableCell>Departman</TableCell>
             <TableCell>Durum</TableCell><TableCell>Son giriş</TableCell><TableCell width={48} />
           </TableRow>
         </TableHead>
@@ -76,6 +78,12 @@ export default function UsersPage() {
                     onChange={(e) => run(() => api.put(`/api/users/${u.id}/role`, { role: e.target.value }), "Rol güncellendi")}>
                     {(lockedRole ? ROLES : roleOptions).map((r) => <MenuItem key={r.key} value={r.key}>{r.label}</MenuItem>)}
                   </Select>
+                </TableCell>
+                <TableCell sx={{ minWidth: 170 }}>
+                  <Autocomplete size="small" freeSolo options={depts.data ?? []} value={u.department ?? ""} disabled={!canManage}
+                    onChange={(_, v) => { if ((v ?? "") !== (u.department ?? "")) run(() => api.put(`/api/users/${u.id}/department`, { department: v || null }), "Departman güncellendi"); }}
+                    renderInput={(p) => <TextField {...p} variant="standard" placeholder="—"
+                      onBlur={(e) => { const v = e.target.value.trim(); if (v !== (u.department ?? "")) run(() => api.put(`/api/users/${u.id}/department`, { department: v || null }), "Departman güncellendi"); }} />} />
                 </TableCell>
                 <TableCell><StatusChip u={u} /></TableCell>
                 <TableCell>{u.lastLoginAt ? timeAgo(u.lastLoginAt) : "—"}</TableCell>
@@ -153,11 +161,11 @@ function EraseDialog({ user, onClose, onDone }: { user: UserLite | null; onClose
 function InviteDialog({ open, roles, onClose, onDone }: {
   open: boolean; roles: { key: string; label: string }[]; onClose: () => void; onDone: (email: string) => void;
 }) {
-  const [f, setF] = useState({ fullName: "", email: "", role: "Employee" });
+  const [f, setF] = useState({ fullName: "", email: "", role: "Employee", department: "" });
   const [error, setError] = useState("");
   const m = useMutation({
     mutationFn: async () => api.post("/api/users/invite", f),
-    onSuccess: () => { onDone(f.email); setF({ fullName: "", email: "", role: "Employee" }); setError(""); },
+    onSuccess: () => { onDone(f.email); setF({ fullName: "", email: "", role: "Employee", department: "" }); setError(""); },
     onError: (e) => setError(errorMessage(e)),
   });
   return (
@@ -168,6 +176,7 @@ function InviteDialog({ open, roles, onClose, onDone }: {
           {error && <Alert severity="error">{error}</Alert>}
           <TextField label="Ad soyad" value={f.fullName} onChange={(e) => setF({ ...f, fullName: e.target.value })} autoFocus />
           <TextField label="E-posta" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+          <TextField label="Departman" value={f.department} onChange={(e) => setF({ ...f, department: e.target.value })} placeholder="Örn. Muhasebe" />
           <TextField select label="Rol" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>
             {roles.map((r) => <MenuItem key={r.key} value={r.key}>{r.label}</MenuItem>)}
           </TextField>

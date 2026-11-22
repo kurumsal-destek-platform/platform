@@ -43,7 +43,7 @@ public class AuthController : ApiControllerBase
         return new
         {
             token = TokenService.Create(user, _jwt, remember),
-            user = new { user.Id, user.Email, user.FullName, user.Role, user.TenantId, tenantName = tenant?.Name },
+            user = new { user.Id, user.Email, user.FullName, user.Role, user.Department, user.TenantId, tenantName = tenant?.Name },
         };
     }
 
@@ -105,7 +105,7 @@ public class AuthController : ApiControllerBase
         if (await FindByEmail(email) is not null) return Conflict(new { message = "Bu e-posta ile kayıtlı bir hesap var. Giriş yapın ya da şifrenizi sıfırlayın." });
 
         var tenant = new Tenant { Name = req.CompanyName.Trim() };
-        var user = new User { TenantId = tenant.Id, Email = email, FullName = req.FullName.Trim(), Role = Roles.Admin };
+        var user = new User { TenantId = tenant.Id, Email = email, FullName = req.FullName.Trim(), Role = Roles.Admin, Department = "Yönetim" };
         user.PasswordHash = _hasher.HashPassword(user, req.Password);
         Db.Tenants.Add(tenant);
         Db.Users.Add(user);
@@ -204,7 +204,7 @@ public class AuthController : ApiControllerBase
         var user = await Db.Users.FirstOrDefaultAsync(u => u.Id == Me);
         if (user is null) return Unauthorized();
         var tenant = await Db.Tenants.FindAsync(user.TenantId);
-        return Ok(new { user.Id, user.Email, user.FullName, user.Role, user.TenantId, tenantName = tenant?.Name, user.LastLoginAt });
+        return Ok(new { user.Id, user.Email, user.FullName, user.Role, user.Department, user.TenantId, tenantName = tenant?.Name, user.LastLoginAt });
     }
 
     [HttpPost("change-password")]

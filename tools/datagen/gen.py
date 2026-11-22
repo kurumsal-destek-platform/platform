@@ -19,11 +19,14 @@ STAFF = [("selin@anka.com", "Selin Arslan"), ("burak@anka.com", "Burak Şahin"),
          ("gizem@anka.com", "Gizem Yalçın"), ("hakan@anka.com", "Hakan Polat"), ("ozge@anka.com", "Özge Kurt"),
          ("murat@anka.com", "Murat Eren"), ("ece@anka.com", "Ece Tunç"), ("baris@anka.com", "Barış Kaplan"),
          ("sevgi@anka.com", "Sevgi Aksoy"), ("onur@anka.com", "Onur Çakır"), ("pinar@anka.com", "Pınar Güneş")]
+DEPT = {"yonetici@anka.com": "IT Destek", "admin@anka.com": "Bilgi İşlem", "ali@anka.com": "IT Destek", "mehmet@anka.com": "IT Destek", "ayse@anka.com": "Muhasebe", "emre@anka.com": "IT Destek", "selin@anka.com": "İnsan Kaynakları", "burak@anka.com": "Satış", "can@anka.com": "Operasyon", "gizem@anka.com": "Muhasebe", "hakan@anka.com": "Lojistik", "ozge@anka.com": "Satış", "murat@anka.com": "Operasyon", "ece@anka.com": "İnsan Kaynakları", "baris@anka.com": "Lojistik", "sevgi@anka.com": "Muhasebe", "onur@anka.com": "Depo", "pinar@anka.com": "Satış", "yonetici@mavi.com": "Yönetim", "deniz@mavi.com": "Yazılım", "tolga@mavi.com": "Yazılım"}  # departmanlar (kullanıcı adının altında görünür)
 users = [dict(email=MGR[0], name=MGR[1], role=MGR[2]), dict(email=ADMIN[0], name=ADMIN[1], role=ADMIN[2])]
 # Ali ve Mehmet "Destek uzmanı" (tüm kuyruğu görür); Ayşe ve Emre çalışan olup sadece kendilerine atananları çözer
 AGENTS = {"ali@anka.com", "mehmet@anka.com"}
 users += [dict(email=e, name=v[0], role="Agent" if e in AGENTS else "Employee") for e, v in IT.items()]
 users += [dict(email=e, name=n, role="Employee") for e, n in STAFF]
+for _u in users:
+    _u["department"] = DEPT.get(_u["email"])
 reporters = [e for e, _ in STAFF] + list(IT)  # IT ekibi de bazen ticket açar
 
 def solver_for(cat):

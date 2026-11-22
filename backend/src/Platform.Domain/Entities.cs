@@ -39,9 +39,10 @@ public static class TicketStatus
     public const string Open = "open";
     public const string Assigned = "assigned";
     public const string InProgress = "in_progress";
+    public const string Waiting = "waiting";      // çalışandan yanıt bekleniyor: SLA süresi durur
     public const string Resolved = "resolved";
     public const string Closed = "closed";
-    public static readonly string[] All = { Open, Assigned, InProgress, Resolved, Closed };
+    public static readonly string[] All = { Open, Assigned, InProgress, Waiting, Resolved, Closed };
 }
 
 public class Tenant
@@ -58,6 +59,7 @@ public class User : ITenantEntity
     public string FullName { get; set; } = "";
     public string PasswordHash { get; set; } = "";   // davet edilip henüz şifre koymamışsa boş
     public string Role { get; set; } = Roles.Employee;
+    public string? Department { get; set; }          // "Muhasebe", "IT Destek"… (firma kendi listesini oluşturur)
     public bool IsActive { get; set; } = true;
     public bool EmailConfirmed { get; set; }
     public int FailedLoginCount { get; set; }
@@ -156,6 +158,9 @@ public class Ticket : ITenantEntity
     public DateTime? ResolvedAt { get; set; }
     public Guid? WorkItemId { get; set; }   // göreve çevrildiyse
     public Guid? IncidentId { get; set; }   // büyük bir olaya bağlandıysa
+    public Guid? MergedIntoId { get; set; } // başka bir ticket ile birleştirildiyse (bu ticket kapanır)
+    public Guid[] Watchers { get; set; } = Array.Empty<Guid>();  // ek takipçiler: görür ve bildirim alır
+    public DateTime? WaitingSince { get; set; }  // "yanıt bekleniyor" durumuna geçiş anı (SLA durur)
 
     // ---- SLA ----
     public DateTime? ResponseDueAt { get; set; }    // ilk yanıt için son an (mesai saatine göre)
@@ -399,5 +404,19 @@ public class Attachment : ITenantEntity
     public long Size { get; set; }
     public string StoredName { get; set; } = "";  // diskteki adı
     public Guid UploadedBy { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Hazır yanıt: destek ekibinin sık yazdığı cevaplar. {ad}, {ticket}, {benim_adim} yer tutucuları doldurulur.
+public class CannedResponse : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string Title { get; set; } = "";
+    public string Body { get; set; } = "";
+    public string? Category { get; set; }
+    public Guid CreatedBy { get; set; }
+    public bool Shared { get; set; } = true;     // tüm destek ekibi kullanır (değilse sadece oluşturan)
+    public int UsageCount { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

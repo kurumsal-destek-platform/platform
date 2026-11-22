@@ -8,6 +8,8 @@ namespace Platform.Api.Controllers;
 public record CreateTicketRequest(string Title, string? Description, string? Category, string? Priority, Guid? IncidentId = null);
 public record TicketStatusRequest(string Status, string? ResolutionNote);
 public record CsatRequest(int Rating, string? Comment);
+public record MergeRequest(Guid TargetId);
+public record WatchRequest(Guid UserId, bool Watch = true);
 public record ConvertTicketRequest(string ProjectKey, string? Type, Guid? AssigneeId, string? Priority);
 
 [Route("api/tickets")]
@@ -20,7 +22,8 @@ public class TicketsController : ApiControllerBase
         t.Id, t.Title, t.Description, t.Category, t.Priority, t.Status, t.ResolutionNote, t.CreatedAt,
         t.ReporterId, reporterName = names.GetValueOrDefault(t.ReporterId),
         t.AssigneeId, assigneeName = t.AssigneeId is Guid a ? names.GetValueOrDefault(a) : null,
-        t.WorkItemId, t.IncidentId, t.ResolvedAt,
+        t.WorkItemId, t.IncidentId, t.ResolvedAt, t.MergedIntoId, t.WaitingSince,
+        watchers = t.Watchers.Select(w => new { id = w, name = names.GetValueOrDefault(w) }),
         workItemKey = t.WorkItemId is Guid wid && itemKeys is not null ? itemKeys.GetValueOrDefault(wid) : null,
         sla = Sla.Dto(t, DateTime.UtcNow),
         csat = t.CsatRating is int r ? new { rating = r, comment = t.CsatComment, at = t.CsatAt } : null,
@@ -62,7 +65,7 @@ public class TicketsController : ApiControllerBase
     [HttpGet("mine")]
     public async Task<IActionResult> Mine()
     {
-        var list = await Db.Tickets.Where(t => t.ReporterId == Me || t.AssigneeId == Me)
+        var list = await Db.Tickets.Where(t => t.ReporterId == Me || t.AssigneeId == Me || t.Watchers.Contains(Me))
             .OrderByDescending(t => t.CreatedAt).ToListAsync();
         var names = await UserNamesAsync();
         var keys = await ItemKeysAsync(list);
@@ -130,7 +133,7 @@ public class TicketsController : ApiControllerBase
     public async Task<IActionResult> Get(Guid id)
     {
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == id);
-        if (t is null || !(t.ReporterId == Me || t.AssigneeId == Me || IsSupport)) return NotFound();
+        if (t is null || !(t.ReporterId == Me || t.AssigneeId == Me || t.Watchers.Contains(Me) || IsSupport)) return NotFound();
         return Ok(ToDto(t, await UserNamesAsync(), await ItemKeysAsync(new List<Ticket> { t })));
     }
 
@@ -166,6 +169,10 @@ public class TicketsController : ApiControllerBase
             Events.Notify(Db, t.TenantId, t.ReporterId, Me, "Ticket durumunuz güncellendi",
                 $"{t.Title} → {Events.StatusLabel(req.Status)}", "/tickets");
         var wasOpen = Sla.OpenStatuses.Contains(t.Status);
+        // "Yanıt bekleniyor": SLA süresi durur; çıkınca geçen mesai süresi kadar hedef ileri kayar
+        if (req.Status == TicketStatus.Waiting && t.Status != TicketStatus.Waiting) Sla.EnterWaiting(t, DateTime.UtcNow);
+        else if (t.Status == TicketStatus.Waiting && req.Status != TicketStatus.Waiting)
+            Sla.LeaveWaiting(t, DateTime.UtcNow, (await Sla.LoadAsync(Db, t.TenantId)).Settings);
         t.Status = req.Status;
         if (req.ResolutionNote is not null) t.ResolutionNote = req.ResolutionNote;
         if (req.Status != TicketStatus.Open) t.FirstResponseAt ??= DateTime.UtcNow; // SLA: ilk yanıt
@@ -177,6 +184,67 @@ public class TicketsController : ApiControllerBase
                     $"\"{t.Title}\" çözüldü. 10 saniyenizi ayırıp değerlendirir misiniz?", $"/tickets?rate={t.Id}");
         }
         else t.ResolvedAt = null;
+        await Db.SaveChangesAsync();
+        return Ok(ToDto(t, await UserNamesAsync()));
+    }
+
+    // Birleştirme: aynı sorun için açılmış ikinci ticket ana ticket'a taşınır; yazışma ve ekler de taşınır.
+    // Kaynak ticket kapanır, açan kişi ana ticket'ı takip etmeye başlar (görür ve bildirim alır).
+    [HttpPost("{id:guid}/merge")]
+    public async Task<IActionResult> Merge(Guid id, MergeRequest req)
+    {
+        if (!IsSupport) return Forbidden("Birleştirme için destek ekibinde olmalısınız.");
+        if (id == req.TargetId) return BadRequest(new { message = "Ticket kendisiyle birleştirilemez." });
+        var src = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == id);
+        var dst = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == req.TargetId);
+        if (src is null || dst is null) return NotFound();
+        if (src.MergedIntoId is not null) return BadRequest(new { message = "Bu ticket zaten birleştirilmiş." });
+        if (dst.MergedIntoId is not null || dst.Status is TicketStatus.Closed)
+            return BadRequest(new { message = "Hedef ticket kapalı ya da başka bir ticket ile birleştirilmiş." });
+
+        var me = await Db.Users.Where(u => u.Id == Me).Select(u => u.FullName).FirstAsync();
+        foreach (var m in await Db.TicketMessages.Where(m => m.TicketId == src.Id).ToListAsync()) m.TicketId = dst.Id;
+        foreach (var a in await Db.Attachments.Where(a => a.TicketId == src.Id).ToListAsync()) a.TicketId = dst.Id;
+
+        // Kaynağın açıklaması ana ticket'ta da görünsün (bilgi kaybolmasın)
+        Db.TicketMessages.Add(new TicketMessage
+        {
+            TenantId = dst.TenantId, TicketId = dst.Id, AuthorId = src.ReporterId,
+            Body = $"🔗 Birleştirilen ticket \"{src.Title}\":\n{src.Description}",
+        });
+        Db.TicketMessages.Add(new TicketMessage
+        {
+            TenantId = dst.TenantId, TicketId = dst.Id, AuthorId = TicketIntake.System, Internal = true,
+            Body = $"🔗 {me}, \"{src.Title}\" ticket'ını bununla birleştirdi.",
+        });
+        var watchers = dst.Watchers.ToHashSet();
+        foreach (var w in src.Watchers.Append(src.ReporterId))
+            if (w != dst.ReporterId && w != dst.AssigneeId) watchers.Add(w);
+        dst.Watchers = watchers.ToArray();
+
+        src.MergedIntoId = dst.Id;
+        src.Status = TicketStatus.Closed;
+        src.ResolvedAt ??= DateTime.UtcNow;
+        src.WaitingSince = null;
+        src.ResolutionNote = $"\"{dst.Title}\" ile birleştirildi.";
+        if (src.ReporterId != dst.ReporterId)
+            Events.Notify(Db, src.TenantId, src.ReporterId, Me, "Talebiniz birleştirildi",
+                $"\"{src.Title}\" aynı sorun için açılmış \"{dst.Title}\" ile birleştirildi; gelişmeleri oradan takip edebilirsiniz.", $"/tickets?open={dst.Id}");
+        await Db.SaveChangesAsync();
+        return Ok(ToDto(dst, await UserNamesAsync()));
+    }
+
+    // Takipçi ekle/çıkar: destek ekibi başkasını, herkes kendini ekleyebilir
+    [HttpPost("{id:guid}/watchers")]
+    public async Task<IActionResult> Watch(Guid id, WatchRequest req)
+    {
+        var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == id);
+        if (t is null || !(t.ReporterId == Me || t.AssigneeId == Me || t.Watchers.Contains(Me) || IsSupport)) return NotFound();
+        if (req.UserId != Me && !IsSupport) return Forbidden("Başkasını sadece destek ekibi ekleyebilir.");
+        if (!await Db.Users.AnyAsync(u => u.Id == req.UserId && u.IsActive)) return BadRequest(new { message = "Kullanıcı bulunamadı." });
+        var set = t.Watchers.ToHashSet();
+        if (req.Watch) set.Add(req.UserId); else set.Remove(req.UserId);
+        t.Watchers = set.ToArray();
         await Db.SaveChangesAsync();
         return Ok(ToDto(t, await UserNamesAsync()));
     }

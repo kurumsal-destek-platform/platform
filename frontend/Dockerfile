@@ -4,7 +4,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-ARG VITE_API_URL=http://localhost:5235
+# same-origin: API aynı adresin /api yolunda (nginx.conf). Ayrı adres gerekiyorsa tam URL verin.
+ARG VITE_API_URL=same-origin
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 

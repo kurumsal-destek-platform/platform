@@ -39,6 +39,7 @@ public class AppDbContext : DbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();
     public DbSet<AutomationRule> AutomationRules => Set<AutomationRule>();
+    public DbSet<CannedResponse> CannedResponses => Set<CannedResponse>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -71,6 +72,7 @@ public class AppDbContext : DbContext
         b.Entity<AuditLog>().HasIndex(x => new { x.TenantId, x.At });
         b.Entity<TenantSettings>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<AutomationRule>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<CannedResponse>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<WorkItemLink>().HasIndex(x => x.SourceId);
         b.Entity<AuthToken>().HasIndex(x => x.TokenHash).IsUnique();
         b.Entity<WorkItemLink>().HasIndex(x => x.TargetId);
