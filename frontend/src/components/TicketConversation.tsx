@@ -10,6 +10,7 @@ import LockIcon from "@mui/icons-material/LockOutlined";
 import SystemIcon from "@mui/icons-material/SettingsSuggestOutlined";
 import { api, errorMessage, timeAgo, type Ticket } from "../api";
 import { initials } from "./Layout";
+import { avatarColor } from "../theme";
 
 interface Msg { id: string; body: string; internal: boolean; aiAssisted: boolean; createdAt: string; authorId: string; authorName?: string; fromSupport: boolean; system?: boolean }
 interface DraftSource { type: "article" | "ticket"; id: string; title: string; resolution?: string; rating?: number | null }
@@ -63,7 +64,7 @@ export default function TicketConversation({ ticket, isSupport }: { ticket: Tick
           const mine = m.fromSupport === isSupport && !(isSupport && m.authorId === ticket.reporterId);
           return (
             <Stack key={m.id} direction={mine ? "row-reverse" : "row"} spacing={1} sx={{ alignItems: "flex-end" }}>
-              <Avatar sx={{ width: 28, height: 28, fontSize: 11, bgcolor: m.fromSupport ? "primary.main" : "#f79233" }}>{initials(m.authorName)}</Avatar>
+              <Avatar sx={{ width: 28, height: 28, fontSize: 11, bgcolor: m.fromSupport ? "primary.main" : avatarColor(m.authorName) }}>{initials(m.authorName)}</Avatar>
               <Box sx={{
                 maxWidth: "78%", px: 1.5, py: 1, borderRadius: 2,
                 bgcolor: m.internal ? "warning.light" : mine ? "primary.main" : "action.hover",
@@ -108,8 +109,7 @@ export default function TicketConversation({ ticket, isSupport }: { ticket: Tick
       <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
         {isSupport && (
           <Button variant="outlined" startIcon={makeDraft.isPending ? <CircularProgress size={16} /> : <AutoIcon />}
-            disabled={makeDraft.isPending} onClick={() => makeDraft.mutate()}
-            sx={{ borderImage: "linear-gradient(90deg,#6554c0,#0c66e4) 1" }}>
+            disabled={makeDraft.isPending} onClick={() => makeDraft.mutate()}>
             {makeDraft.isPending ? "Yazıyor…" : "Cevap taslağı"}
           </Button>
         )}

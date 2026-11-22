@@ -56,7 +56,7 @@ public static class MailText
 
     public static string Html(string title, string body, string? url = null, string? button = null) => $"""
         <div style="font-family:Segoe UI,Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#172b4d">
-          <h2 style="margin:0 0 16px">◆ Destek Platformu</h2>
+          <h2 style="margin:0 0 16px">ESENN</h2>
           <h3 style="margin:0 0 12px">{WebUtility.HtmlEncode(title)}</h3>
           <div style="line-height:1.5;white-space:pre-wrap">{WebUtility.HtmlEncode(body)}</div>
           {(url is null ? "" : $"<p style=\"margin:24px 0\"><a href=\"{url}\" style=\"background:#0c66e4;color:#fff;padding:10px 18px;border-radius:4px;text-decoration:none\">{button}</a></p>")}

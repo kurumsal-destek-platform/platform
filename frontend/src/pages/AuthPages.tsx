@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link as RouterLink, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Collapse, FormControlLabel,
+  Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, FormControlLabel,
   IconButton, InputAdornment, Link, LinearProgress, Stack, TextField, Typography,
 } from "@mui/material";
 import Visibility from "@mui/icons-material/VisibilityOutlined";
@@ -9,6 +9,7 @@ import VisibilityOff from "@mui/icons-material/VisibilityOffOutlined";
 import CheckIcon from "@mui/icons-material/CheckCircle";
 import DotIcon from "@mui/icons-material/RadioButtonUnchecked";
 import { useAuth } from "../auth";
+import { BRAND } from "../theme";
 import { api, errorCode, errorMessage, PASSWORD_RULES, type Me } from "../api";
 
 type Session = { token: string; user: Me };
@@ -16,18 +17,37 @@ type Session = { token: string; user: Me };
 // ---------- Ortak parçalar ----------
 export function AuthShell({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center", bgcolor: "background.default", px: 2, py: 4 }}>
-      <Box sx={{ width: "100%", maxWidth: 420 }}>
-        <Typography variant="h5" sx={{ textAlign: "center", fontWeight: 700, mb: 3, color: "#0052cc" }}>
-          ◆ Destek Platformu
-        </Typography>
-        <Card variant="outlined" sx={{ boxShadow: "0 1px 3px rgba(9,30,66,.15)" }}>
-          <CardContent sx={{ p: 4 }}>
-            <Typography variant="h6" sx={{ textAlign: "center", mb: subtitle ? 0.5 : 3 }}>{title}</Typography>
-            {subtitle && <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mb: 3 }}>{subtitle}</Typography>}
-            {children}
-          </CardContent>
-        </Card>
+    <Box sx={{ minHeight: "100vh", display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(360px, 44%) 1fr" }, bgcolor: "background.default" }}>
+      {/* Sol: karşılama paneli (masaüstünde) */}
+      <Box sx={{ display: { xs: "none", md: "flex" }, flexDirection: "column", justifyContent: "space-between", p: 6,
+        bgcolor: BRAND.sidebar, color: "#e7f0ed", position: "relative", overflow: "hidden" }}>
+        <Box sx={{ position: "absolute", width: 420, height: 420, borderRadius: "50%", bgcolor: BRAND.coral, opacity: 0.9, right: -160, bottom: -140 }} />
+        <Box sx={{ position: "absolute", width: 180, height: 180, borderRadius: "50%", border: "28px solid rgba(255,255,255,0.08)", right: 120, top: 90 }} />
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", position: "relative" }}>
+          <Box component="img" src="/esenn-logo.svg" alt="" sx={{ width: 52, height: 52 }} />
+          <Typography sx={{ fontWeight: 800, fontSize: 26, letterSpacing: 2 }}>ESENN</Typography>
+        </Stack>
+        <Box sx={{ position: "relative", maxWidth: 380 }}>
+          <Typography sx={{ fontSize: 34, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.6, mb: 2 }}>
+            Sorununuzu yazın,<br />gerisini ekibimiz takip etsin.
+          </Typography>
+          <Typography sx={{ color: "rgba(231,240,237,0.72)", lineHeight: 1.6 }}>
+            Talepleriniz, projeleriniz ve şirket içi rehberler tek yerde. Ne durumda olduğunu her an görebilirsiniz.
+          </Typography>
+        </Box>
+        <Typography variant="caption" sx={{ color: "rgba(231,240,237,0.5)", position: "relative" }}>Kurumsal destek platformu</Typography>
+      </Box>
+      {/* Sağ: form */}
+      <Box sx={{ display: "grid", placeItems: "center", px: 2, py: 4 }}>
+        <Box sx={{ width: "100%", maxWidth: 400 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "center", mb: 3, display: { md: "none" } }}>
+            <Box component="img" src="/esenn-logo.svg" alt="" sx={{ width: 44, height: 44 }} />
+            <Typography sx={{ fontWeight: 800, fontSize: 26, letterSpacing: 2, color: "primary.main" }}>ESENN</Typography>
+          </Stack>
+          <Typography variant="h5" sx={{ mb: subtitle ? 0.5 : 3 }}>{title}</Typography>
+          {subtitle && <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>{subtitle}</Typography>}
+          {children}
+        </Box>
       </Box>
     </Box>
   );

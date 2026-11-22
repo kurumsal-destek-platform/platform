@@ -136,13 +136,13 @@ export default function TicketsPage() {
   const emptyText = f.q ? `"${f.q}" için sonuç yok. Başka bir kelime deneyin.`
     : f.sla !== "all" ? "Bu filtrede ticket yok. 🎉"
     : f.tab === "all" ? "Firmada henüz ticket yok. Çalışanlar portaldan, asistandan veya e-postayla ticket açabilir."
-    : "Henüz ticket'ınız yok. Bir sorununuz varsa önce Asistan'a sorun, çözülmezse \"Ticket oluştur\"a tıklayın.";
+    : "Henüz talebiniz yok. Bir sorununuz varsa önce \"Soru sor\" ile hızlı cevap deneyin, çözülmezse \"Yeni talep oluştur\"a tıklayın.";
 
   return (
     <>
       <Stack direction="row" sx={{ alignItems: "center", mb: 2, gap: 1, flexWrap: "wrap" }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, flex: 1 }}>Ticketlar</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => nav("/tickets/new")}>Ticket oluştur</Button>
+        <Typography variant="h5" sx={{ fontWeight: 700, flex: 1 }}>{isSupportRole(user?.role) ? "Talepler" : "Taleplerim"}</Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => nav("/tickets/new")}>Yeni talep</Button>
       </Stack>
 
       {toRate.length > 0 && f.tab === "mine" && (
@@ -153,8 +153,8 @@ export default function TicketsPage() {
       )}
 
       <Tabs value={f.tab} onChange={(_, v) => setF({ tab: v })} sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}>
-        <Tab value="mine" label="Benim ticketlarım" />
-        {isManager && <Tab value="all" label={all.data && f.tab === "all" ? `Tüm ticketlar (${all.data.total})` : "Tüm ticketlar"} />}
+        <Tab value="mine" label="Açtıklarım" />
+        {isManager && <Tab value="all" label={all.data && f.tab === "all" ? `Tüm talepler (${all.data.total})` : "Tüm talepler"} />}
       </Tabs>
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 2, alignItems: { md: "center" } }}>
@@ -164,8 +164,8 @@ export default function TicketsPage() {
             htmlInput: { "aria-label": "Ticket ara" } }} />
         <ToggleButtonGroup size="small" exclusive value={f.sla} onChange={(_, v) => v && setF({ sla: v })} sx={{ flexWrap: "wrap" }}>
           <ToggleButton value="all">Tümü</ToggleButton>
-          <ToggleButton value="at_risk">⏳ Dolmak üzere ({counts.atRisk})</ToggleButton>
-          <ToggleButton value="breached">🔴 SLA aşıldı ({counts.breached})</ToggleButton>
+          <ToggleButton value="at_risk">Süresi dolmak üzere ({counts.atRisk})</ToggleButton>
+          <ToggleButton value="breached">Süresi aşıldı ({counts.breached})</ToggleButton>
         </ToggleButtonGroup>
         <Chip label="Sadece açıklar" color={f.open ? "primary" : "default"} variant={f.open ? "filled" : "outlined"}
           disabled={f.sla !== "all"} onClick={() => setF({ open: !f.open })} sx={{ alignSelf: { xs: "flex-start", md: "center" } }} />

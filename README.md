@@ -1,4 +1,4 @@
-# Kurumsal Destek Platformu
+# ESENN — Kurumsal Destek Platformu
 
 Jira benzeri proje yönetimi + ticket + self-servis bilgi bankası + kendi sunucumuzda çalışan RAG asistanı.
 

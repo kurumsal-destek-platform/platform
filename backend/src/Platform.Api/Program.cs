@@ -111,7 +111,7 @@ builder.Services.AddControllers(o => { o.Filters.Add<LiveBroadcastFilter>(); o.F
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Kurumsal Destek Platformu API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "ESENN API", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Type = SecuritySchemeType.Http,

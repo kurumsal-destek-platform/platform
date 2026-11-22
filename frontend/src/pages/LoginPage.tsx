@@ -39,7 +39,7 @@ export default function LoginPage() {
     <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 2 }}>
       <Card sx={{ width: 400, maxWidth: "100%" }}>
         <CardContent sx={{ p: 4 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>◆ Destek Platformu</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>ESENN</Typography>
           <Typography color="text.secondary" sx={{ mb: 3 }}>Hesabınıza giriş yapın</Typography>
           <form onSubmit={submit}>
             <Stack spacing={2}>
