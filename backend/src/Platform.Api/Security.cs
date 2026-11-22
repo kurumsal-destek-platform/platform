@@ -15,7 +15,7 @@ public interface IEmailSender
 }
 
 // Smtp:Host boşsa e-postayı göndermez, loga yazar (geliştirme için).
-// Docker'da Mailpit'e gider: http://localhost:8025 adresinden gelen kutusu görülür.
+// Docker'da Mailpit'e gider: http://localhost:8025/mail/ (veya http://<sunucu>:5173/mail/) adresinden gelen kutusu görülür.
 public class SmtpEmailSender : IEmailSender
 {
     private readonly IConfiguration _cfg;

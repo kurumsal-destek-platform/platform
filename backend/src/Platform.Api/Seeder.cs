@@ -57,6 +57,7 @@ public static class Seeder
                 var user = new User
                 {
                     TenantId = tid, Email = S(u, "email"), FullName = S(u, "name"), Role = S(u, "role"),
+                    Department = string.IsNullOrEmpty(S(u, "department")) ? null : S(u, "department"),
                     EmailConfirmed = true, CreatedAt = now.AddDays(-120), LastLoginAt = now.AddHours(-Random.Shared.Next(1, 72)),
                 };
                 user.PasswordHash = hasher.HashPassword(user, password);
@@ -66,6 +67,10 @@ public static class Seeder
             Guid UserId(string? email) => email is not null && users.TryGetValue(email, out var x) ? x.Id : Guid.Empty;
             Guid? OptUser(JsonNode? n, string key) => (string?)n?[key] is string e && users.ContainsKey(e) ? users[e].Id : null;
             var manager = users.Values.FirstOrDefault(u => u.Role == Roles.Manager) ?? users.Values.First();
+
+            // ---- Hazır yanıtlar (destek ekibinin sık yazdıkları) ----
+            foreach (var (title, cat, body) in DefaultCanned)
+                db.CannedResponses.Add(new CannedResponse { TenantId = tid, Title = title, Category = cat, Body = body, CreatedBy = manager.Id, Shared = true });
 
             // ---- Bilgi bankası ----
             var articles = new List<Article>();
@@ -262,6 +267,15 @@ public static class Seeder
         }
         db.SaveChanges();
     }
+
+    public static readonly (string Title, string? Category, string Body)[] DefaultCanned =
+    {
+        ("Ek bilgi isteği", null, "Merhaba {ad},\n\nSorunu inceleyebilmemiz için hata mesajının ekran görüntüsünü ve sorunun ne zamandan beri yaşandığını paylaşır mısınız?\n\nTeşekkürler,\n{benim_adim}"),
+        ("Şifre sıfırlandı", "Erişim/Hesap", "Merhaba {ad},\n\nŞifre sıfırlama bağlantınız e-posta adresinize gönderildi. Bağlantı 30 dakika geçerlidir; yeni şifreniz en az 10 karakter olmalı.\n\nİyi çalışmalar,\n{benim_adim}"),
+        ("Uzaktan bağlanacağız", null, "Merhaba {ad},\n\n\"{ticket}\" için bilgisayarınıza uzaktan bağlanmamız gerekiyor. Uygun olduğunuz saati yazar mısınız? Bağlantı sırasında açık belgelerinizi kaydetmenizi rica ederiz.\n\n{benim_adim}"),
+        ("Çözüldü, kontrol eder misiniz?", null, "Merhaba {ad},\n\nYaptığımız düzenlemeyle sorunun çözülmüş olması gerekiyor. Kontrol edip sonucu bize yazar mısınız? Sorun devam ederse bu mesajı yanıtlamanız yeterli.\n\nTeşekkürler,\n{benim_adim}"),
+        ("VPN ilk adımlar", "Ağ/VPN", "Merhaba {ad},\n\nLütfen sırayla deneyin:\n1) Anka Connect'i tamamen kapatıp yeniden açın.\n2) Sunucu adresinin vpn.anka.com.tr olduğunu kontrol edin.\n3) Authenticator onayını 60 saniye içinde verin.\nSonucu bu ticket'a yazar mısınız?\n\n{benim_adim}"),
+    };
 
     private static string S(JsonNode? n, string key) => (string?)n?[key] ?? "";
 }

@@ -1,9 +1,13 @@
 import axios from "axios";
 import { filenameFromDisposition } from "./helpers";
 
-// Backend adresi .env dosyasından gelir (VITE_API_URL).
+// Backend adresi (VITE_API_URL):
+//  - "same-origin" (Docker): API aynı adresin /api yolunda (nginx yönlendirir). Uygulama hangi adresten açılırsa
+//    (localhost, 192.168.x.x, takım sunucusu) o adresin API'sine gider → herkes aynı sisteme bağlanabilir.
+//  - tanımsız (npm run dev): http://localhost:5235
+const RAW_API = import.meta.env.VITE_API_URL as string | undefined;
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:5235",
+  baseURL: RAW_API === undefined ? "http://localhost:5235" : RAW_API === "same-origin" ? "" : RAW_API,
 });
 
 const TOKEN_KEY = "kdp_token";
@@ -61,10 +65,10 @@ export const PASSWORD_RULES: { label: string; test: (p: string) => boolean }[] =
 
 // ---- Tipler (backend DTO'ları ile aynı) ----
 export interface Me {
-  id: string; email: string; fullName: string; role: string; tenantId: string; tenantName?: string;
+  id: string; email: string; fullName: string; role: string; department?: string | null; tenantId: string; tenantName?: string;
 }
 export interface UserLite {
-  id: string; fullName: string; email: string; role: string;
+  id: string; fullName: string; email: string; role: string; department?: string | null;
   isActive?: boolean; invited?: boolean; locked?: boolean; lastLoginAt?: string | null; createdAt?: string;
 }
 // İlerleme: Epic'ler sayılmaz. mine = bana atanan işler, team = projenin tamamı (liste uçunda gelir)
@@ -130,11 +134,12 @@ export interface Ticket {
   id: string; title: string; description: string; category: string; priority: string; status: string;
   createdAt: string; reporterId: string; reporterName?: string; assigneeId?: string | null; assigneeName?: string | null;
   workItemId?: string | null; workItemKey?: string | null; resolutionNote?: string | null; incidentId?: string | null;
-  resolvedAt?: string | null;
+  resolvedAt?: string | null; mergedIntoId?: string | null; waitingSince?: string | null;
+  watchers?: { id: string; name?: string | null }[];
   sla?: SlaInfo;
   csat?: { rating: number; comment?: string | null; at: string } | null;
 }
-export type SlaState = "met" | "breached" | "running" | "at_risk" | "none";
+export type SlaState = "met" | "breached" | "running" | "at_risk" | "none" | "paused";
 export interface SlaInfo {
   responseDueAt?: string | null; resolutionDueAt?: string | null; firstResponseAt?: string | null;
   response: SlaState; resolution: SlaState;
@@ -227,7 +232,7 @@ export const STATUSES: { key: string; label: string }[] = [
 export const statusLabel = (s: string) => STATUSES.find((x) => x.key === s)?.label ?? s;
 
 export const TICKET_STATUSES: Record<string, string> = {
-  open: "Açık", assigned: "Atandı", in_progress: "İşlemde", resolved: "Çözüldü", closed: "Kapandı",
+  open: "Açık", assigned: "Atandı", in_progress: "İşlemde", waiting: "Yanıt bekleniyor", resolved: "Çözüldü", closed: "Kapandı",
 };
 export const CATEGORIES = ["Donanım", "Yazılım/Lisans", "Ağ/VPN", "Erişim/Hesap", "E-posta", "Diğer"];
 export const PRIORITIES: Record<string, string> = { Low: "Düşük", Medium: "Orta", High: "Yüksek", Critical: "Kritik" };
@@ -313,3 +318,9 @@ export interface MailChannelT { supportAddress: string; mailpitInbox: boolean; w
 export const ROLE_LABEL: Record<string, string> = { Employee: "Çalışan", Agent: "Destek uzmanı", Manager: "Yönetici", Admin: "Admin" };
 export const isSupportRole = (r?: string | null) => r === "Agent" || r === "Manager" || r === "Admin";
 export const isManagerRole = (r?: string | null) => r === "Manager" || r === "Admin";
+
+// Kullanıcı adının altındaki satır: "Destek uzmanı · IT Destek"
+export const roleLine = (role?: string | null, department?: string | null) =>
+  [ROLE_LABEL[role ?? ""] ?? role, department].filter(Boolean).join(" · ");
+export const OPEN_TICKET_STATUSES = ["open", "assigned", "in_progress", "waiting"];
+export interface CannedT { id: string; title: string; body: string; category?: string | null; shared: boolean; usageCount: number; createdBy?: string; mine: boolean; canEdit: boolean }

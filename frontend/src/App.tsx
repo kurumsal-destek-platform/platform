@@ -18,6 +18,7 @@ import NewTicketPage from "./pages/NewTicketPage";
 import KnowledgePage from "./pages/KnowledgePage";
 import AssistantPage from "./pages/AssistantPage";
 import DashboardPage from "./pages/DashboardPage";
+import CannedPage from "./pages/CannedPage";
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/insights/gaps" element={<KnowledgeGapsPage />} />
         <Route path="/performance" element={<PerformancePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/canned" element={<CannedPage />} />
         <Route path="/automation" element={<AutomationPage />} />
         <Route path="/system" element={<SystemPage />} />
         <Route path="/profile" element={<ProfilePage />} />

@@ -1,3 +1,4 @@
+import { CannedMenu } from "./TicketExtras";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -34,7 +35,7 @@ export default function TicketConversation({ ticket, isSupport }: { ticket: Tick
     onSuccess: (d) => { setText(d.draft); setInternal(false); setDraft({ text: d.draft, ai: d.aiGenerated, sources: d.sources }); },
   });
   const send = useMutation({
-    mutationFn: async () => api.post(`/api/tickets/${ticket.id}/messages`, { body: text, internal, aiAssisted: !!draft }),
+    mutationFn: async (waitForReply: boolean = false) => api.post(`/api/tickets/${ticket.id}/messages`, { body: text, internal, aiAssisted: !!draft, waitForReply }),
     onSuccess: () => {
       setText(""); setDraft(null); setInternal(false);
       qc.invalidateQueries({ queryKey: ["ticketMessages", ticket.id] });
@@ -103,7 +104,7 @@ export default function TicketConversation({ ticket, isSupport }: { ticket: Tick
       <TextField fullWidth multiline minRows={2} maxRows={10} value={text} onChange={(e) => setText(e.target.value)}
         placeholder={internal ? "Ekip içi not (çalışan görmez)…" : isSupport ? "Çalışana cevap yazın…" : "Destek ekibine yazın…"}
         sx={internal ? { "& .MuiOutlinedInput-root": { bgcolor: "action.hover" } } : undefined}
-        onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && text.trim()) send.mutate(); }} />
+        onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && text.trim()) send.mutate(false); }} />
       <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
         {isSupport && (
           <Button variant="outlined" startIcon={makeDraft.isPending ? <CircularProgress size={16} /> : <AutoIcon />}
@@ -112,13 +113,19 @@ export default function TicketConversation({ ticket, isSupport }: { ticket: Tick
             {makeDraft.isPending ? "Yazıyor…" : "Cevap taslağı"}
           </Button>
         )}
+        {isSupport && <CannedMenu ticketId={ticket.id} onInsert={(t) => setText((o) => (o.trim() ? o + "\n\n" : "") + t)} />}
         {isSupport && (
           <FormControlLabel control={<Switch size="small" checked={internal} onChange={(e) => setInternal(e.target.checked)} />}
             label={<Typography variant="body2">İç not</Typography>} />
         )}
         <Box sx={{ flex: 1 }} />
         <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", sm: "block" } }}>Ctrl+Enter</Typography>
-        <Button variant="contained" endIcon={<SendIcon />} disabled={!text.trim() || send.isPending} onClick={() => send.mutate()}>
+        {isSupport && !internal && (
+          <Tooltip title="Cevabı gönderir, durumu 'Yanıt bekleniyor' yapar ve SLA süresini durdurur. Çalışan cevap yazınca süre kaldığı yerden devam eder.">
+            <Button variant="outlined" disabled={!text.trim() || send.isPending} onClick={() => send.mutate(true)}>Gönder ve yanıt bekle</Button>
+          </Tooltip>
+        )}
+        <Button variant="contained" endIcon={<SendIcon />} disabled={!text.trim() || send.isPending} onClick={() => send.mutate(false)}>
           {internal ? "Notu kaydet" : "Gönder"}
         </Button>
       </Stack>

@@ -18,7 +18,7 @@ import TicketDialog from "../components/TicketDialog";
 import { CsatDialog, CsatStars, SlaChip } from "../components/SlaCsat";
 
 const PAGE_SIZE = 25;
-const isOpen = (t: Ticket) => ["open", "assigned", "in_progress"].includes(t.status);
+const isOpen = (t: Ticket) => ["open", "assigned", "in_progress", "waiting"].includes(t.status);
 const slaOf = (t: Ticket) => (t.sla?.response === "breached" || t.sla?.resolution === "breached") ? "breached"
   : (t.sla?.response === "at_risk" || t.sla?.resolution === "at_risk") ? "at_risk" : "ok";
 const matches = (t: Ticket, q: string) => {

@@ -5,7 +5,7 @@ using Platform.Infrastructure;
 
 namespace Platform.Api.Controllers;
 
-public record PostMessageRequest(string Body, bool Internal = false, bool AiAssisted = false);
+public record PostMessageRequest(string Body, bool Internal = false, bool AiAssisted = false, bool WaitForReply = false);   // WaitForReply: "gönder ve yanıt bekle" (SLA durur)
 
 // Ticket yazışması + destek ekibi için yapay zekâ cevap taslağı
 [Route("api/tickets/{ticketId:guid}")]
@@ -27,7 +27,7 @@ public class TicketMessagesController : ApiControllerBase
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == ticketId);
         if (t is null) return (null, false, false);
         var support = IsSupport || t.AssigneeId == Me;
-        return (t, support || t.ReporterId == Me, support);
+        return (t, support || t.ReporterId == Me || t.Watchers.Contains(Me), support);
     }
 
     [HttpGet("messages")]
@@ -70,10 +70,23 @@ public class TicketMessagesController : ApiControllerBase
             {
                 t.FirstResponseAt ??= DateTime.UtcNow;   // SLA: ekibin ilk cevabı = ilk yanıt
                 if (t.Status == TicketStatus.Open) { t.Status = TicketStatus.InProgress; t.AssigneeId ??= Me; }
-                Events.Notify(Db, t.TenantId, t.ReporterId, Me, "Destek ekibi cevap yazdı", $"\"{t.Title}\": {TextUtil.Snip(m.Body, 120)}", $"/tickets?open={t.Id}");
+                if (req.WaitForReply && t.Status is not (TicketStatus.Resolved or TicketStatus.Closed))
+                {
+                    Sla.EnterWaiting(t, DateTime.UtcNow);
+                    t.Status = TicketStatus.Waiting;
+                }
+                foreach (var w in t.Watchers.Append(t.ReporterId).Distinct().Where(w => w != Me))
+                    Events.Notify(Db, t.TenantId, w, Me, req.WaitForReply ? "Destek ekibi yanıtınızı bekliyor" : "Destek ekibi cevap yazdı",
+                        $"\"{t.Title}\": {TextUtil.Snip(m.Body, 120)}", $"/tickets?open={t.Id}");
             }
-            else if (t.AssigneeId is Guid a)
-                Events.Notify(Db, t.TenantId, a, Me, "Çalışan cevap yazdı", $"\"{t.Title}\": {TextUtil.Snip(m.Body, 120)}", $"/tickets?open={t.Id}");
+            else
+            {
+                // Çalışan (veya takipçi) yazdı: bekleniyorsa ticket işleme döner, SLA yeniden işler
+                var wasWaiting = t.Status == TicketStatus.Waiting;
+                await Sla.ResumeIfWaitingAsync(Db, t, Me);
+                if (!wasWaiting && t.AssigneeId is Guid a)
+                    Events.Notify(Db, t.TenantId, a, Me, "Çalışan cevap yazdı", $"\"{t.Title}\": {TextUtil.Snip(m.Body, 120)}", $"/tickets?open={t.Id}");
+            }
         }
         await Db.SaveChangesAsync();
         var names = await UserNamesAsync();

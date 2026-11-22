@@ -5,7 +5,8 @@ using Platform.Infrastructure;
 
 namespace Platform.Api.Controllers;
 
-public record InviteRequest(string Email, string FullName, string? Role);
+public record InviteRequest(string Email, string FullName, string? Role, string? Department = null);
+public record DepartmentRequest(string? Department);
 public record RoleRequest(string Role);
 public record ActiveRequest(bool IsActive);
 
@@ -27,7 +28,7 @@ public class UsersController : ApiControllerBase
         var list = await q.OrderBy(u => u.FullName).ToListAsync();
         return Ok(list.Select(u => new
         {
-            u.Id, u.FullName, u.Email, u.Role, u.IsActive, u.LastLoginAt, u.CreatedAt,
+            u.Id, u.FullName, u.Email, u.Role, u.Department, u.IsActive, u.LastLoginAt, u.CreatedAt,
             invited = u.PasswordHash == "",
             locked = u.LockoutEnd > DateTime.UtcNow,
         }));
@@ -47,10 +48,10 @@ public class UsersController : ApiControllerBase
             return Conflict(new { message = "Bu e-posta ile kayıtlı bir kullanıcı var." });
 
         var me = await Db.Users.FirstAsync(u => u.Id == Me);
-        var user = new User { TenantId = me.TenantId, Email = email, FullName = req.FullName.Trim(), Role = role };
+        var user = new User { TenantId = me.TenantId, Email = email, FullName = req.FullName.Trim(), Role = role, Department = CleanDept(req.Department) };
         Db.Users.Add(user);
         await SendInviteAsync(user, me.FullName);
-        return Ok(new { user.Id, user.Email, user.FullName, user.Role, invited = true });
+        return Ok(new { user.Id, user.Email, user.FullName, user.Role, user.Department, invited = true });
     }
 
     [HttpPost("{id:guid}/resend-invite")]
@@ -90,6 +91,28 @@ public class UsersController : ApiControllerBase
         Events.Notify(Db, user.TenantId, user.Id, Me, "Rolünüz değişti", $"Yeni rolünüz: {req.Role}. Lütfen yeniden giriş yapın.", null);
         await Db.SaveChangesAsync();
         return NoContent();
+    }
+
+    private static string? CleanDept(string? d) => string.IsNullOrWhiteSpace(d) ? null : d.Trim()[..Math.Min(d.Trim().Length, 60)];
+
+    // Firmada kullanılan departmanlar (davet ve düzenleme formundaki öneri listesi)
+    [HttpGet("departments")]
+    public async Task<IActionResult> Departments()
+    {
+        var used = await Db.Users.Where(u => u.Department != null).Select(u => u.Department!).Distinct().ToListAsync();
+        var defaults = new[] { "IT Destek", "İnsan Kaynakları", "Muhasebe", "Satış", "Operasyon", "Lojistik", "Yönetim" };
+        return Ok(used.Concat(defaults).Distinct().OrderBy(x => x));
+    }
+
+    [HttpPut("{id:guid}/department")]
+    public async Task<IActionResult> SetDepartment(Guid id, DepartmentRequest req)
+    {
+        if (!IsManagerOrAdmin) return Forbidden("Departmanı sadece yöneticiler değiştirebilir.");
+        var user = await Db.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user is null) return NotFound();
+        user.Department = CleanDept(req.Department);
+        await Db.SaveChangesAsync();
+        return Ok(new { user.Id, user.Department });
     }
 
     [HttpPut("{id:guid}/active")]

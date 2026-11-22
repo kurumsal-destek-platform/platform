@@ -20,7 +20,7 @@ import httpx
 
 API = os.getenv("SMOKE_API", "http://api:8080")
 RAG = os.getenv("SMOKE_RAG", "http://localhost:8000")
-MAIL = os.getenv("SMOKE_MAIL", "http://mailpit:8025")
+MAIL = os.getenv("SMOKE_MAIL", "http://mailpit:8025/mail")
 WEB = os.getenv("SMOKE_WEB", "http://web:80")
 PASSWORD = os.getenv("SMOKE_PASSWORD", "Demo123!")
 
@@ -82,6 +82,18 @@ def _():
     r = c.get(WEB)
     assert r.status_code == 200 and 'id="root"' in r.text, f"HTTP {r.status_code}"
     return OK, "sayfa geliyor"
+
+
+@check("Tek adres: web üzerinden API ve e-posta kutusu")
+def _():
+    # Takım arkadaşları sadece http://<sunucu>:5173 adresini bilir; API ve Mailpit aynı adresten açılmalı
+    h = c.get(f"{WEB}/health")
+    assert h.status_code == 200, (
+        f"/health web üzerinden açılmadı: HTTP {h.status_code} (nginx.conf)"
+    )
+    m = c.get(f"{WEB}/mail/api/v1/messages", params={"limit": 1})
+    assert m.status_code == 200, f"/mail/ web üzerinden açılmadı: HTTP {m.status_code}"
+    return OK, "uygulama, /api ve /mail aynı adreste (5173)"
 
 
 @check("Giriş: yonetici@anka.com")
@@ -409,7 +421,7 @@ def _():
         ]
         if fresh:
             S["reset_mail"] = fresh[0]["ID"]
-            return OK, "e-posta Mailpit'te (http://localhost:8025)"
+            return OK, "e-posta Mailpit'te (http://localhost:8025/mail/)"
     return FAIL, "e-posta 5 sn içinde Mailpit'e düşmedi (docker logs platform-api)"
 
 
@@ -702,6 +714,56 @@ def _():
     return (OK if j["overall"] == "ok" else WARN), (
         "her şey yolunda" if not bad else " | ".join(bad)[:150]
     )
+
+
+# ------------------------------------------------------------------ departman + destek masası
+@check("Departman: kullanıcı bilgisinde görünüyor")
+def _():
+    me = c.get(f"{API}/api/auth/me", headers=H(S["tok"])).json()
+    assert me.get("department"), "department alanı boş"
+    d = c.get(f"{API}/api/users/departments", headers=H(S["tok"])).json()
+    return OK, f"{me['department']} · {len(d)} departman"
+
+
+@check("Hazır yanıtlar: liste + ticket'a göre doldurma")
+def _():
+    lst = c.get(f"{API}/api/canned-responses", headers=H(S["tok"])).json()
+    assert len(lst) >= 1, "hazır yanıt yok"
+    S["aysetok"], _u = login("ayse@anka.com")
+    r = c.post(f"{API}/api/tickets", headers=H(S["aysetok"]), json={"title": "Smoke: yazıcı çıktı vermiyor", "description": "Kontrol amaçlı ticket"})
+    assert r.status_code in (200, 201), f"ticket açılamadı HTTP {r.status_code}"
+    S["t1"] = r.json()["id"]
+    body = c.post(f"{API}/api/canned-responses/{lst[0]['id']}/render", headers=H(S["tok"]), json={"ticketId": S["t1"]}).json()["body"]
+    assert "{ad}" not in body, "yer tutucu doldurulmadı"
+    return OK, f"{len(lst)} yanıt · '{lst[0]['title']}'"
+
+
+@check("Yanıt bekleniyor: SLA durur, cevapla devam eder")
+def _():
+    t1 = S["t1"]
+    r = c.post(f"{API}/api/tickets/{t1}/messages", headers=H(S["tok"]), json={"body": "Yazıcının modelini yazar mısınız?", "waitForReply": True})
+    assert r.status_code == 200, f"HTTP {r.status_code}: {r.text[:120]}"
+    t = c.get(f"{API}/api/tickets/{t1}", headers=H(S["tok"])).json()
+    assert t["status"] == "waiting", f"durum {t['status']} (waiting bekleniyordu)"
+    assert t["sla"]["resolution"] == "paused", f"SLA {t['sla']['resolution']} (paused bekleniyordu)"
+    c.post(f"{API}/api/tickets/{t1}/messages", headers=H(S["aysetok"]), json={"body": "HP LaserJet"})
+    t = c.get(f"{API}/api/tickets/{t1}", headers=H(S["tok"])).json()
+    assert t["status"] != "waiting", "çalışan cevap yazdı ama hâlâ bekliyor"
+    return OK, f"waiting → {t['status']}"
+
+
+@check("Birleştirme + takipçi")
+def _():
+    r = c.post(f"{API}/api/tickets", headers=H(S["aysetok"]), json={"title": "Smoke: yazıcı yine bozuk", "description": "Aynı sorun"})
+    t2 = r.json()["id"]
+    r = c.post(f"{API}/api/tickets/{t2}/merge", headers=H(S["tok"]), json={"targetId": S["t1"]})
+    assert r.status_code == 200, f"HTTP {r.status_code}: {r.text[:120]}"
+    src = c.get(f"{API}/api/tickets/{t2}", headers=H(S["tok"])).json()
+    assert src["mergedIntoId"] == S["t1"] and src["status"] == "closed", "kaynak ticket kapanmadı"
+    me = S["me"]["id"]
+    t = c.post(f"{API}/api/tickets/{S['t1']}/watchers", headers=H(S["tok"]), json={"userId": me, "watch": True}).json()
+    assert any(w["id"] == me for w in t["watchers"]), "takipçi eklenmedi"
+    return OK, f"birleşti · {len(t['watchers'])} takipçi"
 
 
 # ------------------------------------------------------------------ özet

@@ -1,3 +1,4 @@
+import PauseIcon from "@mui/icons-material/HourglassEmptyOutlined";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -16,7 +17,7 @@ function useNow(ms = 30000) {
 }
 
 const COLOR: Record<SlaState, "success" | "error" | "warning" | "default" | "info"> = {
-  met: "success", breached: "error", at_risk: "warning", running: "default", none: "default",
+  met: "success", breached: "error", at_risk: "warning", running: "default", none: "default", paused: "info",
 };
 
 // Ticket listesinde tek rozet: en kritik hedef (önce ilk yanıt, sonra çözüm)
@@ -29,6 +30,8 @@ export function SlaChip({ sla, compact }: { sla?: SlaInfo; compact?: boolean }) 
   const due = kind === "response" ? sla.responseDueAt : sla.resolutionDueAt;
   const label = kind === "response" ? "Yanıt" : "Çözüm";
 
+  if (sla.resolution === "paused" || state === "paused")
+    return <Chip size="small" color="info" variant="outlined" icon={<PauseIcon />} label={compact ? "Durdu" : "⏸ Yanıt bekleniyor — süre durdu"} />;
   if (state === "met") return <Chip size="small" color="success" variant="outlined" icon={<CheckIcon />} label={compact ? "Hedefte" : "SLA hedefinde"} />;
   if (!due) return null;
   const mins = (new Date(due).getTime() - now) / 60000;

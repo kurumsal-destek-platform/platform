@@ -36,6 +36,9 @@ services:
       Seed__Demo: ${DEMO_DATA:-true}
       Logging__Json: ${LOG_JSON:-false}
       Rag__Url: http://rag:8000
+      # E-postalardaki bağlantılar bu adresi kullanır. Ortak sunucuda .env: APP_URL=http://<sunucu IP>:5173
+      App__FrontendUrl: ${APP_URL:-http://localhost:5173}
+      Cors__Origins: ${APP_URL:-http://localhost:5173}
       Uploads__Path: /app/uploads
       # E-postalar gerçek kutulara değil Mailpit'e gider (http://localhost:8025)
       # .env'de SMTP_HOST varsa gerçek e-posta (ör. Gmail), yoksa Mailpit kullanılır
@@ -48,9 +51,9 @@ services:
       # Gelen e-posta → ticket. Demoda destek@platform.local adresine Mailpit'e gelen mailler okunur.
       # Canlıda MAILPIT_INBOX_URL boş bırakılır, sağlayıcı webhook'u POST /api/inbound/email adresine INBOUND_SECRET ile gelir.
       Mail__SupportAddress: ${SUPPORT_ADDRESS:-destek@platform.local}
-      Mail__Inbound__MailpitUrl: ${MAILPIT_INBOX_URL-http://mailpit:8025}
+      Mail__Inbound__MailpitUrl: ${MAILPIT_INBOX_URL-http://mailpit:8025/mail}
       Mail__Inbound__Secret: ${INBOUND_SECRET:-}
-      App__FrontendUrl: http://localhost:5173
+      
       # Makale taslaklarını yazan yerel yapay zekâ (bilgisayardaki Ollama). Kapalıysa şablon kullanılır.
       Ollama__Url: http://host.docker.internal:11434
       Ollama__Model: qwen2.5:3b
@@ -68,6 +71,8 @@ services:
     image: axllent/mailpit:latest
     container_name: platform-mail
     restart: unless-stopped
+    environment:
+      MP_WEBROOT: /mail/   # arayüz http://localhost:8025/mail/ ve http://<sunucu>:5173/mail/
     ports:
       - "8025:8025"   # web arayüzü
       - "1025:1025"   # SMTP (F5 ile çalıştırırken localhost:1025 kullanılır)
@@ -121,13 +126,14 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: http://localhost:5235
+        VITE_API_URL: ${VITE_API_URL:-same-origin}
     container_name: platform-web
     restart: unless-stopped
     depends_on:
       - api
+      - mailpit
     ports:
-      - "5173:80"
+      - "5173:80"   # uygulama + /api + /mail: takım arkadaşları http://<bu bilgisayarın IP'si>:5173 ile bağlanır
 
 volumes:
   pgdata:

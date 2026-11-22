@@ -101,7 +101,9 @@ builder.Services.AddRateLimiter(o =>
 });
 
 builder.Services.AddCors(o => o.AddPolicy("fe", p => p
-    .WithOrigins("http://localhost:5173", "http://localhost:3000")
+    .WithOrigins(new[] { "http://localhost:5173", "http://localhost:3000" }
+        .Concat((builder.Configuration["Cors:Origins"] ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        .Distinct().ToArray())
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()
     .WithExposedHeaders("Content-Disposition")));   // indirilen dosyanın adını tarayıcı okuyabilsin (KVKK dışa aktarma)
 

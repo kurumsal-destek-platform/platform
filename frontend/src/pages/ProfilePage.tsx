@@ -65,7 +65,7 @@ export default function ProfilePage() {
               <Typography variant="h6">{user?.fullName}</Typography>
               <Typography variant="body2" color="text.secondary">{user?.email}</Typography>
               <Typography variant="caption" color="text.secondary">
-                {user?.tenantName} · {ROLE_TR[user?.role ?? ""] ?? user?.role}
+                {user?.tenantName} · {ROLE_TR[user?.role ?? ""] ?? user?.role}{user?.department && ` · ${user.department}`}
                 {me.data?.lastLoginAt && ` · Son giriş: ${new Date(me.data.lastLoginAt).toLocaleString("tr-TR")}`}
               </Typography>
             </Box>

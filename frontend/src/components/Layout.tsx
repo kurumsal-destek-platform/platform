@@ -19,12 +19,13 @@ import SpeedIcon from "@mui/icons-material/SpeedOutlined";
 import SettingsIcon from "@mui/icons-material/SettingsOutlined";
 import MonitorIcon from "@mui/icons-material/MonitorHeartOutlined";
 import BoltIcon from "@mui/icons-material/BoltOutlined";
+import QuickReplyIcon from "@mui/icons-material/QuickreplyOutlined";
 import TopBar from "./TopBar";
 import CommandPalette from "./CommandPalette";
 import WelcomeTour from "./WelcomeTour";
 import ErrorBoundary from "./ErrorBoundary";
 import { useAuth } from "../auth";
-import { isManagerRole, isSupportRole, ROLE_LABEL } from "../api";
+import { isManagerRole, isSupportRole, roleLine } from "../api";
 import { useLiveUpdates } from "../live";
 
 const WIDTH = 248;
@@ -39,6 +40,7 @@ const WORK: NavItem[] = [
 ];
 // Destek uzmanı + yöneticiler
 const SUPPORT: NavItem[] = [
+  { to: "/canned", label: "Hazır yanıtlar", icon: <QuickReplyIcon /> },
   { to: "/incidents", label: "Büyük olaylar", icon: <IncidentIcon /> },
   { to: "/insights/gaps", label: "Bilgi boşlukları", icon: <RadarIcon /> },
 ];
@@ -118,7 +120,7 @@ export default function Layout() {
           <Avatar sx={{ width: 32, height: 32, bgcolor: "#f79233", fontSize: 13 }}>{initials(user?.fullName)}</Avatar>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="body2" noWrap>{user?.fullName}</Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>{ROLE_LABEL[user?.role ?? ""] ?? user?.role}</Typography>
+            <Typography variant="caption" color="text.secondary" noWrap title={roleLine(user?.role, user?.department)}>{roleLine(user?.role, user?.department)}</Typography>
           </Box>
         </Box>
         <Tooltip title="Çıkış yap">
