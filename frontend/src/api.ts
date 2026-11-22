@@ -175,8 +175,16 @@ export interface SettingsT {
   policies: { priority: string; responseHours: number; resolutionHours: number }[];
 }
 
-export interface ArticleLite { id: string; title: string; category: string; snippet: string; published?: boolean; fromTicket?: boolean }
-export interface Article { id: string; title: string; body: string; category: string; published?: boolean }
+export interface ArticleLite {
+  id: string; title: string; category: string; snippet: string; published?: boolean; fromTicket?: boolean;
+  tags?: string[]; version?: number; views?: number; updatedAt?: string; author?: string | null; helpful?: number | null; votes?: number;
+}
+export interface Article {
+  id: string; title: string; body: string; category: string; published?: boolean;
+  tags?: string[]; version?: number; views?: number; createdAt?: string; updatedAt?: string; author?: string | null; updatedBy?: string | null;
+  helpfulYes?: number; helpfulNo?: number; helpful?: number | null; myVote?: boolean | null; canEdit?: boolean; canDelete?: boolean;
+}
+export interface ArticleRevisionT { version: number; title: string; body: string; category: string; tags: string[]; current: boolean; editedAt: string; editedBy?: string | null }
 export interface AskResponse {
   answered: boolean; answer?: string; message?: string; reason?: string; mode?: string;
   // snippet/text: RAG servisi cevabın dayandığı parçayı gönderirse "Kaynağı göster" onu vurgular

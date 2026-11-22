@@ -224,7 +224,7 @@ public class InsightsController : ApiControllerBase
                 """;
         }
 
-        var article = new Article { Title = TextUtil.Snip(title, 150), Body = body, Category = category, Published = false };
+        var article = new Article { Title = TextUtil.Snip(title, 150), Body = body, Category = category, Published = false, CreatedBy = Me };
         Db.Articles.Add(article);
         foreach (var q in questions) q.DraftArticleId = article.Id;
         await Db.SaveChangesAsync(ct);

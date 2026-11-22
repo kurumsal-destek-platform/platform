@@ -766,6 +766,39 @@ def _():
     return OK, f"birleşti · {len(t['watchers'])} takipçi"
 
 
+@check("Bilgi bankası: makale ekle, düzenle, sürüm geçmişi")
+def _():
+    tok = S["tok"]
+    title = f"Smoke makale {uuid.uuid4().hex[:6]}"
+    r = c.post(f"{API}/api/kb/articles", headers=H(tok), json={"title": title, "body": "1) Yeniden başlatın. 2) Tekrar deneyin. 3) Olmazsa talep açın.", "category": "Diğer", "tags": ["Smoke", "#Test"], "published": False})
+    assert r.status_code == 200, f"oluşturma HTTP {r.status_code}: {r.text[:120]}"
+    a = r.json(); S["kb_id"] = a["id"]
+    assert a["tags"] == ["smoke", "test"], f"etiketler temizlenmedi: {a['tags']}"
+    r = c.post(f"{API}/api/kb/articles", headers=H(tok), json={"title": title, "body": "aynı başlık ikinci kez deneniyor burada", "category": "Diğer"})
+    assert r.status_code == 409, f"aynı başlık engellenmedi (HTTP {r.status_code})"
+    r = c.post(f"{API}/api/kb/articles", headers=H(tok), json={"title": "Kısa", "body": "x", "category": "Diğer"})
+    assert r.status_code == 400, "çok kısa makale kabul edildi"
+    r = c.put(f"{API}/api/kb/articles/{a['id']}", headers=H(tok), json={"title": title, "body": "Güncellenmiş içerik: önce kabloyu kontrol edin, sonra yeniden başlatın.", "category": "Donanım", "expectedVersion": 1})
+    assert r.status_code == 200 and r.json()["version"] == 2, f"düzenleme HTTP {r.status_code}"
+    r = c.put(f"{API}/api/kb/articles/{a['id']}", headers=H(tok), json={"title": title, "body": "eski sürüm üzerinden yapılan çakışan değişiklik", "category": "Donanım", "expectedVersion": 1})
+    assert r.status_code == 409, "aynı anda düzenleme çakışması yakalanmadı"
+    revs = c.get(f"{API}/api/kb/articles/{a['id']}/revisions", headers=H(tok)).json()
+    assert len(revs) == 2, f"{len(revs)} sürüm (2 bekleniyordu)"
+    return OK, "v1 → v2, çakışma ve tekrar başlık engellendi"
+
+
+@check("Bilgi bankası: sil (arşiv) ve geri al")
+def _():
+    tok, aid = S["tok"], S["kb_id"]
+    assert c.delete(f"{API}/api/kb/articles/{aid}", headers=H(tok)).status_code == 204, "silinemedi"
+    assert c.get(f"{API}/api/kb/articles/{aid}", headers=H(tok)).status_code == 404, "silinen makale hâlâ görünüyor"
+    arch = c.get(f"{API}/api/kb/archive", headers=H(tok)).json()
+    assert any(x["id"] == aid for x in arch), "arşivde yok"
+    assert c.post(f"{API}/api/kb/archive/{aid}/restore", headers=H(tok)).status_code == 200, "geri alınamadı"
+    c.delete(f"{API}/api/kb/articles/{aid}", headers=H(tok))   # demo verisini kirletmesin
+    return OK, "arşive gitti, geri geldi"
+
+
 # ------------------------------------------------------------------ özet
 print("-" * 78)
 fails = [r for r in results if r[0] == FAIL]

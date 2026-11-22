@@ -343,7 +343,7 @@ public class TicketsController : ApiControllerBase
 
         var a = new Article
         {
-            TenantId = t.TenantId, Title = t.Title, Category = t.Category, Published = false, SourceTicketId = t.Id,
+            TenantId = t.TenantId, Title = t.Title, Category = t.Category, Published = false, SourceTicketId = t.Id, CreatedBy = Me,
             Body = $"Sorun: {t.Description}\n\nÇözüm: {t.ResolutionNote}".Trim(),
         };
         Db.Articles.Add(a);

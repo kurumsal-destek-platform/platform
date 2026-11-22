@@ -89,7 +89,7 @@ public class KbImportController : ApiControllerBase
             existing.Add(title);
             var a = new Article
             {
-                Title = title, Body = s.Body.Trim(), Category = string.IsNullOrWhiteSpace(s.Category) ? "Diğer" : s.Category!,
+                Title = title, CreatedBy = Me, Body = s.Body.Trim(), Category = string.IsNullOrWhiteSpace(s.Category) ? "Diğer" : s.Category!,
                 Published = req.Publish,
             };
             Db.Articles.Add(a);
