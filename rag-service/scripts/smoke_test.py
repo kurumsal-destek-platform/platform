@@ -1,4 +1,4 @@
-"""
+﻿"""
 Kurulum sonrası otomatik kontrol.  Çalıştırma (proje klasöründe):
     docker compose exec rag python scripts/smoke_test.py
 
@@ -801,7 +801,7 @@ def _():
 
 @check("@anma: kişi dizini ve bildirim")
 def _():
-    atok, ayse = login("ayse@anka.com")
+    atok, _ayse = login("ayse@anka.com")
     d = c.get(f"{API}/api/people/directory", headers=H(atok), params={"q": "ali"}).json()
     ali = next((u for u in d if u["fullName"].startswith("Ali")), None)
     assert ali, f"'ali' araması Ali'yi bulmadı: {[u['fullName'] for u in d]}"
