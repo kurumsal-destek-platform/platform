@@ -65,7 +65,8 @@ export interface TicketFilters { tab: "mine" | "all"; q: string; sla: "all" | "a
 export function readTicketFilters(p: URLSearchParams, isManager: boolean): TicketFilters {
   const sla = p.get("sla");
   return {
-    tab: isManager && (p.get("tab") === "all" || !!sla) ? "all" : "mine",
+    // Destek ekibi için varsayılan sekme "Tüm ticketlar" (kuyruk); çalışan sadece kendi ticketlarını görür
+    tab: !isManager ? "mine" : p.get("tab") === "mine" && !sla ? "mine" : "all",
     q: p.get("q") ?? "",
     sla: sla === "at_risk" || sla === "breached" ? sla : "all",
     open: p.get("acik") === "1" || !!sla,
@@ -77,7 +78,7 @@ export function writeTicketFilters(f: TicketFilters, keep?: URLSearchParams): UR
   const p = new URLSearchParams();
   // ?open=<ticketId> ve ?rate=<id> diyalog parametreleri korunur ("sadece açıklar" filtresi ?acik=1)
   for (const k of ["open", "rate"]) { const v = keep?.get(k); if (v) p.set(k, v); }
-  if (f.tab === "all") p.set("tab", "all");
+  if (f.tab === "mine") p.set("tab", "mine");
   if (f.q) p.set("q", f.q);
   if (f.sla !== "all") p.set("sla", f.sla);
   if (f.open && f.sla === "all") p.set("acik", "1");

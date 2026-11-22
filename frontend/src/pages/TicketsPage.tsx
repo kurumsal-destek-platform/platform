@@ -9,7 +9,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import StarIcon from "@mui/icons-material/StarRounded";
 import {
-  api, errorMessage, PRIORITIES, TICKET_STATUSES, timeAgo, type Ticket, type TicketPage, type UserLite,
+  api, errorMessage, isSupportRole, PRIORITIES, TICKET_STATUSES, timeAgo, type Ticket, type TicketPage, type UserLite,
 } from "../api";
 import { useAuth } from "../auth";
 import { readTicketFilters, writeTicketFilters, type TicketFilters } from "../helpers";
@@ -40,7 +40,7 @@ export default function TicketsPage() {
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
   const [params, setParams] = useSearchParams();
-  const isManager = user?.role === "Manager" || user?.role === "Admin";
+  const isManager = isSupportRole(user?.role);   // destek ekibi: tüm kuyruk, atama, durum
 
   // Filtreler adres çubuğunda: yenileyince kaybolmaz, bağlantı paylaşılabilir
   const f = readTicketFilters(params, isManager);

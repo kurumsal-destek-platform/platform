@@ -9,6 +9,7 @@ public interface ITenantEntity
 public static class Roles
 {
     public const string Employee = "Employee";
+    public const string Agent = "Agent";        // Destek uzmanı: tüm ticketları görür ve çözer, yönetim ekranlarına girmez
     public const string Manager = "Manager";
     public const string Admin = "Admin";
 }

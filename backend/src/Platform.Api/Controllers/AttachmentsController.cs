@@ -43,7 +43,7 @@ public class AttachmentsController : ApiControllerBase
     private async Task<bool> CanSeeTicketAsync(Guid ticketId)
     {
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == ticketId);
-        return t is not null && (IsManagerOrAdmin || t.ReporterId == Me || t.AssigneeId == Me);
+        return t is not null && (IsSupport || t.ReporterId == Me || t.AssigneeId == Me);
     }
 
     private async Task<WorkItem?> ItemIfMemberAsync(string key)
@@ -140,7 +140,7 @@ public class AttachmentsController : ApiControllerBase
     {
         var a = await Db.Attachments.FirstOrDefaultAsync(x => x.Id == id);
         if (a is null || !await CanSeeAsync(a)) return NotFound();
-        if (a.UploadedBy != Me && !IsManagerOrAdmin) return Forbidden("Sadece yükleyen kişi veya yönetici silebilir.");
+        if (a.UploadedBy != Me && !IsSupport) return Forbidden("Sadece yükleyen kişi veya destek ekibi silebilir.");
         Db.Attachments.Remove(a);
         await Db.SaveChangesAsync();
         try { System.IO.File.Delete(Path.Combine(_dir, a.StoredName)); }

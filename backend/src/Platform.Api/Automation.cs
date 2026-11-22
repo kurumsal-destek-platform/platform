@@ -83,6 +83,8 @@ public static class TicketIntake
         var users = await db.Users.IgnoreQueryFilters().Where(u => u.TenantId == tid && u.IsActive)
             .Select(u => new { u.Id, u.FullName, u.Role }).ToListAsync(ct);
         var managers = users.Where(u => u.Role == Roles.Manager || u.Role == Roles.Admin).Select(u => u.Id).ToList();
+        // Yeni ticket bildirimi tüm destek ekibine (uzman + yönetici) gider; kuyruğu onlar karşılar
+        var supportTeam = users.Where(u => u.Role is Roles.Agent or Roles.Manager or Roles.Admin).Select(u => u.Id).ToList();
         var assignable = users.ToDictionary(u => u.Id, u => u.FullName);   // IT çalışanları "Employee" rolünde olabilir
 
         // 1) Otomasyon kuralları (SLA hedefinden önce: öncelik değişirse süre de ona göre hesaplanır)
@@ -115,8 +117,8 @@ public static class TicketIntake
         // 4) Yöneticilere bildirim + olası büyük olay uyarısı (bilinen bir olaya bağlı değilse)
         if (t.IncidentId is null)
         {
-            foreach (var m in managers)
-                Events.Notify(db, tid, m, actorId, $"Yeni ticket: {t.Category}", t.Title, "/tickets");
+            foreach (var m in supportTeam.Where(id => id != actorId && id != t.AssigneeId))
+                Events.Notify(db, tid, m, actorId, $"Yeni ticket: {t.Category}", t.Title, $"/tickets?open={t.Id}");
 
             var since = DateTime.UtcNow.AddHours(-2);
             var recent = await db.Tickets.IgnoreQueryFilters().Where(x => x.TenantId == tid && x.IncidentId == null && x.CreatedAt >= since &&
@@ -125,7 +127,7 @@ public static class TicketIntake
             var v = TextSim.Vec(t.Title, t.Description);
             var similar = recent.Count(x => TextSim.Cosine(v, TextSim.Vec(x.Title, x.Description)) >= Controllers.IncidentsController.ClusterThreshold);
             if (similar >= 2)
-                foreach (var m in managers)
+                foreach (var m in supportTeam)
                     Events.Notify(db, tid, m, Guid.Empty, "⚠ Olası büyük olay",
                         $"Son 2 saatte \"{t.Title}\" benzeri {similar + 1} ticket açıldı. Tek olayda birleştirmek ister misiniz?", "/incidents");
         }

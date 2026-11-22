@@ -76,7 +76,7 @@ public class TicketsController : ApiControllerBase
     public async Task<IActionResult> All([FromQuery] string? status, [FromQuery] string? search,
         [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] bool open = false, [FromQuery] string? sla = null)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Tüm ticketları sadece yöneticiler görebilir.");
+        if (!IsSupport) return Forbidden("Tüm ticketları sadece destek ekibi görebilir.");
         var q = Db.Tickets.AsQueryable();
         if (!string.IsNullOrEmpty(status)) q = q.Where(t => t.Status == status);
         if (!string.IsNullOrWhiteSpace(search))
@@ -130,7 +130,7 @@ public class TicketsController : ApiControllerBase
     public async Task<IActionResult> Get(Guid id)
     {
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == id);
-        if (t is null || !(t.ReporterId == Me || t.AssigneeId == Me || IsManagerOrAdmin)) return NotFound();
+        if (t is null || !(t.ReporterId == Me || t.AssigneeId == Me || IsSupport)) return NotFound();
         return Ok(ToDto(t, await UserNamesAsync(), await ItemKeysAsync(new List<Ticket> { t })));
     }
 
@@ -138,7 +138,7 @@ public class TicketsController : ApiControllerBase
     [HttpPut("{id:guid}/assignee")]
     public async Task<IActionResult> Assign(Guid id, AssignRequest req)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Ticket atamak için yönetici olmalısınız.");
+        if (!IsSupport) return Forbidden("Ticket atamak için destek ekibinde olmalısınız.");
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == id);
         if (t is null) return NotFound();
         if (req.AssigneeId is Guid a && !await Db.Users.AnyAsync(u => u.Id == a))
@@ -159,7 +159,7 @@ public class TicketsController : ApiControllerBase
     {
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == id);
         if (t is null) return NotFound();
-        if (t.AssigneeId != Me && !IsManagerOrAdmin) return Forbidden("Durumu sadece atanan kişi veya yönetici değiştirebilir.");
+        if (t.AssigneeId != Me && !IsSupport) return Forbidden("Durumu sadece destek ekibi değiştirebilir.");
         if (!TicketStatus.All.Contains(req.Status)) return BadRequest(new { message = "Geçersiz durum." });
 
         if (t.Status != req.Status)
@@ -263,7 +263,7 @@ public class TicketsController : ApiControllerBase
     [HttpPost("{id:guid}/to-article")]
     public async Task<IActionResult> ToArticle(Guid id)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Makale oluşturmak için yönetici olmalısınız.");
+        if (!IsSupport) return Forbidden("Makale oluşturmak için destek ekibinde olmalısınız.");
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == id);
         if (t is null) return NotFound();
         if (t.Status is not (TicketStatus.Resolved or TicketStatus.Closed))

@@ -25,7 +25,7 @@ public class InsightsController : ApiControllerBase
     [HttpGet("tickets/{id:guid}/assign-suggestions")]
     public async Task<IActionResult> AssignSuggestions(Guid id)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Sadece yöneticiler.");
+        if (!IsSupport) return Forbidden("Sadece destek ekibi.");
         var ticket = await Db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
 
@@ -91,7 +91,7 @@ public class InsightsController : ApiControllerBase
     [HttpGet("insights/knowledge-gaps")]
     public async Task<IActionResult> KnowledgeGaps(CancellationToken ct)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Sadece yöneticiler.");
+        if (!IsSupport) return Forbidden("Sadece destek ekibi.");
         var since = DateTime.UtcNow.AddDays(-60);
         var articles = await Db.Articles.ToListAsync(ct); // taslaklar da sayılır: taslağı yazılmış konu tekrar çıkmasın
         var articleVecs = articles.Select(a => TextSim.Vec(a.Title, a.Body)).ToList();
@@ -165,7 +165,7 @@ public class InsightsController : ApiControllerBase
     [HttpPost("insights/knowledge-gaps/draft")]
     public async Task<IActionResult> DraftArticle(DraftGapRequest req, CancellationToken ct)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Sadece yöneticiler.");
+        if (!IsSupport) return Forbidden("Sadece destek ekibi.");
         var qIds = req.QuestionIds ?? Array.Empty<Guid>();
         var tIds = req.TicketIds ?? Array.Empty<Guid>();
         var questions = await Db.AssistantQueries.Where(q => qIds.Contains(q.Id)).ToListAsync(ct);

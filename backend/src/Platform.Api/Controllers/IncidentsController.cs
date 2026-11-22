@@ -62,7 +62,7 @@ public class IncidentsController : ApiControllerBase
     [HttpGet("suggestions")]
     public async Task<IActionResult> Suggestions()
     {
-        if (!IsManagerOrAdmin) return Forbidden("Sadece yöneticiler.");
+        if (!IsSupport) return Forbidden("Sadece destek ekibi.");
         var since = DateTime.UtcNow.AddDays(-3);
         var open = await Db.Tickets
             .Where(t => t.IncidentId == null && OpenStatuses.Contains(t.Status) && t.CreatedAt >= since)
@@ -94,7 +94,7 @@ public class IncidentsController : ApiControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateIncidentRequest req)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Büyük olay oluşturmak için yönetici olmalısınız.");
+        if (!IsSupport) return Forbidden("Büyük olay oluşturmak için destek ekibinde olmalısınız.");
         if (string.IsNullOrWhiteSpace(req.Title)) return BadRequest(new { message = "Başlık gerekli." });
         var me = await Db.Users.FirstAsync(u => u.Id == Me);
         var inc = new Incident
@@ -111,7 +111,7 @@ public class IncidentsController : ApiControllerBase
     [HttpPost("{id:guid}/tickets")]
     public async Task<IActionResult> AddTickets(Guid id, IncidentTicketsRequest req)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Yetkiniz yok.");
+        if (!IsSupport) return Forbidden("Yetkiniz yok.");
         var inc = await Db.Incidents.FirstOrDefaultAsync(x => x.Id == id);
         if (inc is null) return NotFound();
         await LinkAsync(inc, req.TicketIds);
@@ -122,7 +122,7 @@ public class IncidentsController : ApiControllerBase
     [HttpDelete("{id:guid}/tickets/{ticketId:guid}")]
     public async Task<IActionResult> RemoveTicket(Guid id, Guid ticketId)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Yetkiniz yok.");
+        if (!IsSupport) return Forbidden("Yetkiniz yok.");
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == ticketId && x.IncidentId == id);
         if (t is null) return NotFound();
         t.IncidentId = null;
@@ -148,7 +148,7 @@ public class IncidentsController : ApiControllerBase
     [HttpPost("{id:guid}/resolve")]
     public async Task<IActionResult> Resolve(Guid id, ResolveIncidentRequest req)
     {
-        if (!IsManagerOrAdmin) return Forbidden("Yetkiniz yok.");
+        if (!IsSupport) return Forbidden("Yetkiniz yok.");
         if (string.IsNullOrWhiteSpace(req.ResolutionNote)) return BadRequest(new { message = "Çözüm notu gerekli." });
         var inc = await Db.Incidents.FirstOrDefaultAsync(x => x.Id == id);
         if (inc is null) return NotFound();

@@ -20,7 +20,9 @@ STAFF = [("selin@anka.com", "Selin Arslan"), ("burak@anka.com", "Burak Şahin"),
          ("murat@anka.com", "Murat Eren"), ("ece@anka.com", "Ece Tunç"), ("baris@anka.com", "Barış Kaplan"),
          ("sevgi@anka.com", "Sevgi Aksoy"), ("onur@anka.com", "Onur Çakır"), ("pinar@anka.com", "Pınar Güneş")]
 users = [dict(email=MGR[0], name=MGR[1], role=MGR[2]), dict(email=ADMIN[0], name=ADMIN[1], role=ADMIN[2])]
-users += [dict(email=e, name=v[0], role="Employee") for e, v in IT.items()]
+# Ali ve Mehmet "Destek uzmanı" (tüm kuyruğu görür); Ayşe ve Emre çalışan olup sadece kendilerine atananları çözer
+AGENTS = {"ali@anka.com", "mehmet@anka.com"}
+users += [dict(email=e, name=v[0], role="Agent" if e in AGENTS else "Employee") for e, v in IT.items()]
 users += [dict(email=e, name=n, role="Employee") for e, n in STAFF]
 reporters = [e for e, _ in STAFF] + list(IT)  # IT ekibi de bazen ticket açar
 

@@ -24,6 +24,7 @@ import CommandPalette from "./CommandPalette";
 import WelcomeTour from "./WelcomeTour";
 import ErrorBoundary from "./ErrorBoundary";
 import { useAuth } from "../auth";
+import { isManagerRole, isSupportRole, ROLE_LABEL } from "../api";
 import { useLiveUpdates } from "../live";
 
 const WIDTH = 248;
@@ -36,11 +37,15 @@ const WORK: NavItem[] = [
   { to: "/kb", label: "Bilgi bankası", icon: <BookIcon /> },
   { to: "/assistant", label: "Asistan", icon: <ChatIcon /> },
 ];
+// Destek uzmanı + yöneticiler
+const SUPPORT: NavItem[] = [
+  { to: "/incidents", label: "Büyük olaylar", icon: <IncidentIcon /> },
+  { to: "/insights/gaps", label: "Bilgi boşlukları", icon: <RadarIcon /> },
+];
+// Sadece yönetici/admin
 const MANAGE: NavItem[] = [
   { to: "/dashboard", label: "Gösterge paneli", icon: <DashboardIcon /> },
   { to: "/performance", label: "Performans", icon: <SpeedIcon /> },
-  { to: "/incidents", label: "Büyük olaylar", icon: <IncidentIcon /> },
-  { to: "/insights/gaps", label: "Bilgi boşlukları", icon: <RadarIcon /> },
   { to: "/users", label: "Kullanıcılar", icon: <PeopleIcon /> },
   { to: "/automation", label: "Otomasyon", icon: <BoltIcon /> },
   { to: "/settings", label: "Hedefler ve ayarlar", icon: <SettingsIcon /> },
@@ -59,7 +64,8 @@ export default function Layout() {
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
   const live = useLiveUpdates(user?.id);
-  const isManager = user?.role === "Manager" || user?.role === "Admin";
+  const isManager = isManagerRole(user?.role);
+  const isSupport = isSupportRole(user?.role);
 
   useEffect(() => { setDrawer(false); }, [loc.pathname]);
 
@@ -94,6 +100,11 @@ export default function Layout() {
       </Button>
       <Box sx={{ flex: 1, overflowY: "auto" }}>
         <List dense disablePadding>{navList(WORK)}</List>
+        {isSupport && (
+          <List dense disablePadding subheader={<ListSubheader disableSticky sx={{ bgcolor: "transparent", lineHeight: "32px", mt: 1 }}>Destek</ListSubheader>}>
+            {navList(SUPPORT)}
+          </List>
+        )}
         {isManager && (
           <List dense disablePadding subheader={<ListSubheader disableSticky sx={{ bgcolor: "transparent", lineHeight: "32px", mt: 1 }}>Yönetim</ListSubheader>}>
             {navList(MANAGE)}
@@ -107,7 +118,7 @@ export default function Layout() {
           <Avatar sx={{ width: 32, height: 32, bgcolor: "#f79233", fontSize: 13 }}>{initials(user?.fullName)}</Avatar>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="body2" noWrap>{user?.fullName}</Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>{user?.role}</Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>{ROLE_LABEL[user?.role ?? ""] ?? user?.role}</Typography>
           </Box>
         </Box>
         <Tooltip title="Çıkış yap">

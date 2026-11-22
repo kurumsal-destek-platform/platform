@@ -19,7 +19,7 @@ import { Person } from "./common";
 export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | null; onClose: () => void }) {
   const { user } = useAuth();
   const nav = useNavigate();
-  const isManager = user?.role === "Manager" || user?.role === "Admin";
+  const isManager = user?.role === "Manager" || user?.role === "Admin" || user?.role === "Agent";   // destek ekibi
   const [converting, setConverting] = useState(false);
   const [assignedTo, setAssignedTo] = useState("");
   const phone = useMediaQuery(useTheme().breakpoints.down("sm"));

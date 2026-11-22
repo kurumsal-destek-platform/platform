@@ -16,6 +16,8 @@ public abstract class ApiControllerBase : ControllerBase
     protected Guid Me => Guid.Parse(User.FindFirst("sub")!.Value);
     protected string MyRole => User.FindFirst("role")?.Value ?? Roles.Employee;
     protected bool IsManagerOrAdmin => MyRole is Roles.Manager or Roles.Admin;
+    // Destek ekibi: ticket kuyruğu, olaylar, bilgi bankası yazımı (yönetim ekranları hariç)
+    protected bool IsSupport => MyRole is Roles.Agent or Roles.Manager or Roles.Admin;
 
     // Kullanıcının bu projedeki üyeliği (yoksa null). Tenant filtresi zaten uygulanır.
     protected Task<ProjectMember?> MembershipAsync(Guid projectId) =>

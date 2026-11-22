@@ -27,7 +27,7 @@ public class SearchController : ApiControllerBase
             .OrderByDescending(w => w.UpdatedAt).Take(8).ToListAsync();
 
         var ticketQuery = Db.Tickets.Where(t => EF.Functions.ILike(t.Title, like));
-        if (!IsManagerOrAdmin) ticketQuery = ticketQuery.Where(t => t.ReporterId == Me || t.AssigneeId == Me);
+        if (!IsSupport) ticketQuery = ticketQuery.Where(t => t.ReporterId == Me || t.AssigneeId == Me);
         var tickets = await ticketQuery.OrderByDescending(t => t.CreatedAt).Take(5).ToListAsync();
 
         var articles = await Db.Articles

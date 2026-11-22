@@ -26,7 +26,7 @@ public class TicketMessagesController : ApiControllerBase
     {
         var t = await Db.Tickets.FirstOrDefaultAsync(x => x.Id == ticketId);
         if (t is null) return (null, false, false);
-        var support = IsManagerOrAdmin || t.AssigneeId == Me;
+        var support = IsSupport || t.AssigneeId == Me;
         return (t, support || t.ReporterId == Me, support);
     }
 
