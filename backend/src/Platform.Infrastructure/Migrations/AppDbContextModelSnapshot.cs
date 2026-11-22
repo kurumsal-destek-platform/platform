@@ -73,6 +73,15 @@ namespace Platform.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("Archived")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ArchivedBy")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasColumnType("text");
@@ -80,11 +89,18 @@ namespace Platform.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("Published")
                         .HasColumnType("boolean");
 
                     b.Property<Guid?>("SourceTicketId")
                         .HasColumnType("uuid");
+
+                    b.Property<string[]>("Tags")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
@@ -92,6 +108,18 @@ namespace Platform.Infrastructure.Migrations
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ViewCount")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -305,6 +333,53 @@ namespace Platform.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("AutomationRules");
+                });
+
+            modelBuilder.Entity("Platform.Domain.ArticleRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ArticleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("EditedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("EditedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string[]>("Tags")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArticleId", "Version");
+
+                    b.ToTable("ArticleRevisions");
                 });
 
             modelBuilder.Entity("Platform.Domain.CannedResponse", b =>

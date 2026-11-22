@@ -40,6 +40,7 @@ public class AppDbContext : DbContext
     public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();
     public DbSet<AutomationRule> AutomationRules => Set<AutomationRule>();
     public DbSet<CannedResponse> CannedResponses => Set<CannedResponse>();
+    public DbSet<ArticleRevision> ArticleRevisions => Set<ArticleRevision>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -55,7 +56,7 @@ public class AppDbContext : DbContext
         b.Entity<WorkItem>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<Comment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<Ticket>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
-        b.Entity<Article>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<Article>().HasQueryFilter(e => e.TenantId == CurrentTenantId && !e.Archived);   // arşivdekiler sadece arşiv ekranında (IgnoreQueryFilters)
         b.Entity<KbFeedback>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<Sprint>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<ActivityLog>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
@@ -73,6 +74,8 @@ public class AppDbContext : DbContext
         b.Entity<TenantSettings>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<AutomationRule>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         b.Entity<CannedResponse>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<ArticleRevision>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        b.Entity<ArticleRevision>().HasIndex(e => new { e.ArticleId, e.Version });
         b.Entity<WorkItemLink>().HasIndex(x => x.SourceId);
         b.Entity<AuthToken>().HasIndex(x => x.TokenHash).IsUnique();
         b.Entity<WorkItemLink>().HasIndex(x => x.TargetId);

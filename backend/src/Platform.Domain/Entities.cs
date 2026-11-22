@@ -300,6 +300,32 @@ public class Article : ITenantEntity
     public bool Published { get; set; } = true;
     public Guid? SourceTicketId { get; set; }  // çözülen ticket'tan üretildiyse
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    // Yönetim bilgileri: kim yazdı/değiştirdi, kaçıncı sürüm, etiketler, okunma, arşiv (silinen makale geri alınabilir)
+    public Guid? CreatedBy { get; set; }
+    public Guid? UpdatedBy { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public int Version { get; set; } = 1;
+    public string[] Tags { get; set; } = Array.Empty<string>();
+    public int ViewCount { get; set; }
+    public bool Archived { get; set; }
+    public DateTime? ArchivedAt { get; set; }
+    public Guid? ArchivedBy { get; set; }
+}
+
+// Makalenin eski sürümleri: her düzenlemeden önce önceki hal saklanır, istenirse geri yüklenir
+public class ArticleRevision : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public Guid ArticleId { get; set; }
+    public int Version { get; set; }
+    public string Title { get; set; } = "";
+    public string Body { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string[] Tags { get; set; } = Array.Empty<string>();
+    public Guid? EditedBy { get; set; }
+    public DateTime EditedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class KbFeedback : ITenantEntity
