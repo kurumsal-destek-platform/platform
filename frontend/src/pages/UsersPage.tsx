@@ -29,6 +29,7 @@ export default function UsersPage() {
   const qc = useQueryClient();
   const isAdmin = user?.role === "Admin";
   const canManage = isAdmin || user?.role === "Manager";
+  const areas = useQuery({ queryKey: ["expertiseAreas"], queryFn: async () => (await api.get<string[]>("/api/people/expertise-areas")).data });
   const depts = useQuery({ queryKey: ["departments"], queryFn: async () => (await api.get<string[]>("/api/users/departments")).data });
   const [toast, setToast] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -61,7 +62,7 @@ export default function UsersPage() {
       <Table size="small" sx={{ bgcolor: "background.paper", minWidth: 720 }}>
         <TableHead>
           <TableRow>
-            <TableCell>Kullanıcı</TableCell><TableCell>E-posta</TableCell><TableCell>Rol</TableCell><TableCell>Departman</TableCell>
+            <TableCell>Kullanıcı</TableCell><TableCell>E-posta</TableCell><TableCell>Rol</TableCell><TableCell>Departman</TableCell><TableCell>Uzmanlık</TableCell>
             <TableCell>Durum</TableCell><TableCell>Son giriş</TableCell><TableCell width={48} />
           </TableRow>
         </TableHead>
@@ -84,6 +85,13 @@ export default function UsersPage() {
                     onChange={(_, v) => { if ((v ?? "") !== (u.department ?? "")) run(() => api.put(`/api/users/${u.id}/department`, { department: v || null }), "Departman güncellendi"); }}
                     renderInput={(p) => <TextField {...p} variant="standard" placeholder="—"
                       onBlur={(e) => { const v = e.target.value.trim(); if (v !== (u.department ?? "")) run(() => api.put(`/api/users/${u.id}/department`, { department: v || null }), "Departman güncellendi"); }} />} />
+                </TableCell>
+                <TableCell sx={{ minWidth: 220 }}>
+                  {u.role === "Employee" ? <Typography variant="caption" color="text.secondary">—</Typography> : (
+                    <Autocomplete multiple freeSolo size="small" options={areas.data ?? []} value={u.expertise ?? []} disabled={!canManage}
+                      onChange={(_, v) => run(() => api.put(`/api/users/${u.id}/expertise`, { expertise: v }), "Uzmanlık alanları güncellendi")}
+                      renderInput={(p) => <TextField {...p} variant="standard" placeholder={(u.expertise ?? []).length ? "" : "Ekle…"} />} />
+                  )}
                 </TableCell>
                 <TableCell><StatusChip u={u} /></TableCell>
                 <TableCell>{u.lastLoginAt ? timeAgo(u.lastLoginAt) : "—"}</TableCell>

@@ -5,7 +5,7 @@ using Platform.Infrastructure;
 
 namespace Platform.Api.Controllers;
 
-public record PostMessageRequest(string Body, bool Internal = false, bool AiAssisted = false, bool WaitForReply = false);   // WaitForReply: "gönder ve yanıt bekle" (SLA durur)
+public record PostMessageRequest(string Body, bool Internal = false, bool AiAssisted = false, bool WaitForReply = false, Guid[]? MentionedUserIds = null);   // WaitForReply: "gönder ve yanıt bekle" (SLA durur)
 
 // Ticket yazışması + destek ekibi için yapay zekâ cevap taslağı
 [Route("api/tickets/{ticketId:guid}")]
@@ -88,8 +88,9 @@ public class TicketMessagesController : ApiControllerBase
                     Events.Notify(Db, t.TenantId, a, Me, "Çalışan cevap yazdı", $"\"{t.Title}\": {TextUtil.Snip(m.Body, 120)}", $"/tickets?open={t.Id}");
             }
         }
-        await Db.SaveChangesAsync();
         var names = await UserNamesAsync();
+        await People.ApplyMentionsAsync(Db, t, Me, m.Body, req.MentionedUserIds, req.Internal, names.GetValueOrDefault(Me) ?? "Bir kullanıcı");
+        await Db.SaveChangesAsync();
 
         // Destek ekibinin cevabı çalışana e-postayla da gider; çalışan maili yanıtlarsa cevap bu ticket'a düşer
         if (!req.Internal && support && Me != t.ReporterId)

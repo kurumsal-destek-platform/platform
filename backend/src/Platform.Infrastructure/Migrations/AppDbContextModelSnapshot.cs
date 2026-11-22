@@ -911,6 +911,10 @@ namespace Platform.Infrastructure.Migrations
                     b.Property<int>("FailedLoginCount")
                         .HasColumnType("integer");
 
+                    b.Property<string[]>("Expertise")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text");

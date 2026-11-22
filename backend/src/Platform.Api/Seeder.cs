@@ -11,6 +11,16 @@ namespace Platform.Api;
 // Tüm şifreler: Demo123!
 public static class Seeder
 {
+    // Demo destek ekibinin uzmanlık alanları ("Kimler ilgilenir?" ekranı boş görünmesin)
+    private static readonly Dictionary<string, string[]> DemoExpertise = new()
+    {
+        ["yonetici@anka.com"] = new[] { "VIP", "Erişim/Hesap" },
+        ["admin@anka.com"] = new[] { "VIP", "Ağ/VPN", "Donanım" },
+        ["ali@anka.com"] = new[] { "Yazılım/Lisans", "E-posta", "SAP" },
+        ["mehmet@anka.com"] = new[] { "Donanım", "Ağ/VPN" },
+        ["yonetici@mavi.com"] = new[] { "VIP", "Yazılım/Lisans" },
+    };
+
     public const string DemoPassword = "Demo123!";
 
     // Kimlik doğrulama alanları eklenmeden önce oluşturulan kullanıcılar: aktif ve onaylı yap.
@@ -58,6 +68,7 @@ public static class Seeder
                 {
                     TenantId = tid, Email = S(u, "email"), FullName = S(u, "name"), Role = S(u, "role"),
                     Department = string.IsNullOrEmpty(S(u, "department")) ? null : S(u, "department"),
+                    Expertise = DemoExpertise.GetValueOrDefault(S(u, "email")) ?? Array.Empty<string>(),
                     EmailConfirmed = true, CreatedAt = now.AddDays(-120), LastLoginAt = now.AddHours(-Random.Shared.Next(1, 72)),
                 };
                 user.PasswordHash = hasher.HashPassword(user, password);

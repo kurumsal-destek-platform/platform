@@ -799,6 +799,31 @@ def _():
     return OK, "arşive gitti, geri geldi"
 
 
+@check("@anma: kişi dizini ve bildirim")
+def _():
+    atok, ayse = login("ayse@anka.com")
+    d = c.get(f"{API}/api/people/directory", headers=H(atok), params={"q": "ali"}).json()
+    ali = next((u for u in d if u["fullName"].startswith("Ali")), None)
+    assert ali, f"'ali' araması Ali'yi bulmadı: {[u['fullName'] for u in d]}"
+    assert "department" in ali, "departman bilgisi yok"
+    mavi = c.get(f"{API}/api/people/directory", headers=H(atok), params={"q": "deniz"}).json()
+    assert not mavi, "başka firmanın çalışanı dizinde görünüyor"
+    r = c.post(f"{API}/api/tickets", headers=H(atok), json={"title": "Smoke: anma testi", "description": f"@{ali['fullName']} bakabilir misin?", "category": "Diğer", "mentionedUserIds": [ali["id"]]})
+    assert r.status_code == 200, f"HTTP {r.status_code}"
+    t = r.json()
+    assert any(w["id"] == ali["id"] for w in t.get("watchers", [])) or t.get("assigneeId") == ali["id"], "anılan kişi takipçi olmadı"
+    return OK, f"{ali['fullName']} bulundu, takipçi oldu"
+
+
+@check("Kimler ilgilenir? (uzmanlık)")
+def _():
+    e = c.get(f"{API}/api/people/experts", headers=H(S["tok"]), params={"area": "VIP"}).json()
+    assert e, "VIP konusunda kimse yok (demo uzmanlıkları yüklenmemiş)"
+    assert all(x["role"] != "Employee" for x in e), "listede destek ekibi dışından biri var"
+    areas = c.get(f"{API}/api/people/expertise-areas", headers=H(S["tok"])).json()
+    return OK, f"VIP: {', '.join(x['fullName'] for x in e[:3])} · {len(areas)} alan"
+
+
 # ------------------------------------------------------------------ özet
 print("-" * 78)
 fails = [r for r in results if r[0] == FAIL]
