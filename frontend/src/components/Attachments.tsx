@@ -22,7 +22,7 @@ export default function Attachments({ basePath, canUpload = true }: { basePath: 
       for (const f of files) {
         const form = new FormData();
         form.append("file", f);
-        await api.post(`${basePath}/attachments`, form);
+        await api.post(`${basePath}/attachments`, form, { timeout: 600000 });   // büyük dosya: 10 dk
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
@@ -51,14 +51,14 @@ export default function Attachments({ basePath, canUpload = true }: { basePath: 
               Dosya ekle
             </Button>
             <input ref={input} type="file" multiple hidden
-              accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.log,.csv,.docx,.xlsx,.pptx,.zip"
+              accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.log,.csv,.docx,.xlsx,.pptx,.zip,.mp4,.webm"
               onChange={(e) => { const f = Array.from(e.target.files ?? []); e.target.value = ""; if (f.length) { setError(""); upload.mutate(f); } }} />
           </>
         )}
       </Stack>
       {upload.isPending && <LinearProgress sx={{ mb: 1 }} />}
       {error && <Alert severity="error" onClose={() => setError("")} sx={{ mb: 1 }}>{error}</Alert>}
-      {list.data?.length === 0 && <Typography variant="body2" color="text.secondary">Ek yok. En fazla 10 MB; resim, PDF, Office, zip.</Typography>}
+      {list.data?.length === 0 && <Typography variant="body2" color="text.secondary">Ek yok. Dosya başına en fazla 100 MB; resim, video, PDF, Office, log, zip.</Typography>}
       <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1 }}>
         {list.data?.map((a) => (
           <Box key={a.id} sx={{ width: 150, border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden" }}>
