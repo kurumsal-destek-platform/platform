@@ -68,7 +68,7 @@ export interface Me {
   id: string; email: string; fullName: string; role: string; department?: string | null; tenantId: string; tenantName?: string;
 }
 export interface UserLite {
-  id: string; fullName: string; email: string; role: string; department?: string | null;
+  id: string; fullName: string; email: string; role: string; department?: string | null; expertise?: string[];
   isActive?: boolean; invited?: boolean; locked?: boolean; lastLoginAt?: string | null; createdAt?: string;
 }
 // İlerleme: Epic'ler sayılmaz. mine = bana atanan işler, team = projenin tamamı (liste uçunda gelir)
@@ -332,3 +332,11 @@ export const roleLine = (role?: string | null, department?: string | null) =>
   [ROLE_LABEL[role ?? ""] ?? role, department].filter(Boolean).join(" · ");
 export const OPEN_TICKET_STATUSES = ["open", "assigned", "in_progress", "waiting"];
 export interface CannedT { id: string; title: string; body: string; category?: string | null; shared: boolean; usageCount: number; createdBy?: string; mine: boolean; canEdit: boolean }
+
+// Kişi dizini (@anma) ve "Kimler ilgilenir?"
+export interface DirectoryUser { id: string; fullName: string; department?: string | null; role: string }
+export interface Expert {
+  id: string; fullName: string; department?: string | null; role: string; expertise: string[]; declared: boolean;
+  solvedInArea: number; similarSolved: number; avgHours?: number | null; csat?: number | null; openLoad?: number | null;
+  availability: "available" | "busy" | "overloaded"; isMe: boolean;
+}

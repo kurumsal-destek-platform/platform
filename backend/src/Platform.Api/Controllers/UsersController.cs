@@ -7,6 +7,7 @@ namespace Platform.Api.Controllers;
 
 public record InviteRequest(string Email, string FullName, string? Role, string? Department = null);
 public record DepartmentRequest(string? Department);
+public record ExpertiseRequest(string[]? Expertise);
 public record RoleRequest(string Role);
 public record ActiveRequest(bool IsActive);
 
@@ -28,7 +29,7 @@ public class UsersController : ApiControllerBase
         var list = await q.OrderBy(u => u.FullName).ToListAsync();
         return Ok(list.Select(u => new
         {
-            u.Id, u.FullName, u.Email, u.Role, u.Department, u.IsActive, u.LastLoginAt, u.CreatedAt,
+            u.Id, u.FullName, u.Email, u.Role, u.Department, u.Expertise, u.IsActive, u.LastLoginAt, u.CreatedAt,
             invited = u.PasswordHash == "",
             locked = u.LockoutEnd > DateTime.UtcNow,
         }));
@@ -113,6 +114,19 @@ public class UsersController : ApiControllerBase
         user.Department = CleanDept(req.Department);
         await Db.SaveChangesAsync();
         return Ok(new { user.Id, user.Department });
+    }
+
+    // Uzmanlık alanları: sadece destek ekibi üyelerine verilir; yönetici/admin düzenler
+    [HttpPut("{id:guid}/expertise")]
+    public async Task<IActionResult> SetExpertise(Guid id, ExpertiseRequest req)
+    {
+        if (!IsManagerOrAdmin) return Forbidden("Uzmanlık alanlarını sadece yöneticiler değiştirebilir.");
+        var user = await Db.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user is null) return NotFound();
+        if (user.Role == Roles.Employee) return BadRequest(new { message = "Uzmanlık alanı sadece destek ekibi üyelerine verilebilir." });
+        user.Expertise = People.NormalizeExpertise(req.Expertise);
+        await Db.SaveChangesAsync();
+        return Ok(new { user.Id, user.Expertise });
     }
 
     [HttpPut("{id:guid}/active")]

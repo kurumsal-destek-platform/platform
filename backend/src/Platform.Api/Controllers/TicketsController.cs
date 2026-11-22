@@ -5,7 +5,7 @@ using Platform.Infrastructure;
 
 namespace Platform.Api.Controllers;
 
-public record CreateTicketRequest(string Title, string? Description, string? Category, string? Priority, Guid? IncidentId = null);
+public record CreateTicketRequest(string Title, string? Description, string? Category, string? Priority, Guid? IncidentId = null, Guid[]? MentionedUserIds = null);
 public record TicketStatusRequest(string Status, string? ResolutionNote);
 public record CsatRequest(int Rating, string? Comment);
 public record MergeRequest(Guid TargetId);
@@ -57,8 +57,10 @@ public class TicketsController : ApiControllerBase
         // Otomasyon kuralları, SLA hedefleri, bildirimler ve olası büyük olay uyarısı (e-postayla gelenlerle ortak)
         var myEmail = await Db.Users.Where(u => u.Id == Me).Select(u => u.Email).FirstOrDefaultAsync();
         await TicketIntake.CreateAsync(Db, t, Me, myEmail);
+        var names = await UserNamesAsync();
+        await People.ApplyMentionsAsync(Db, t, Me, t.Description, req.MentionedUserIds, false, names.GetValueOrDefault(Me) ?? "Bir çalışan");
         await Db.SaveChangesAsync();
-        return Ok(ToDto(t, await UserNamesAsync()));
+        return Ok(ToDto(t, names));
     }
 
     // Açtığım veya bana atanan ticketlar

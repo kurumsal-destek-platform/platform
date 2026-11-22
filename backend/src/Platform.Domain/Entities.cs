@@ -60,6 +60,8 @@ public class User : ITenantEntity
     public string PasswordHash { get; set; } = "";   // davet edilip henüz şifre koymamışsa boş
     public string Role { get; set; } = Roles.Employee;
     public string? Department { get; set; }          // "Muhasebe", "IT Destek"… (firma kendi listesini oluşturur)
+    // Uzmanlık alanları (destek ekibi): kategoriler ve serbest etiketler ("VIP", "SAP"…). "Kimler ilgilenir?" ekranı kullanır.
+    public string[] Expertise { get; set; } = Array.Empty<string>();
     public bool IsActive { get; set; } = true;
     public bool EmailConfirmed { get; set; }
     public int FailedLoginCount { get; set; }

@@ -13,6 +13,8 @@ import SolveWizard from "../components/SolveWizard";
 import ScreenshotIcon from "@mui/icons-material/ScreenshotMonitorOutlined";
 import { celebrate } from "../delight";
 import { api, CATEGORIES, errorMessage, formatSize, PRIORITIES, type Article, type ArticleLite, type IncidentMatch } from "../api";
+import MentionField from "../components/MentionField";
+import { ExpertsButton } from "../components/ExpertsDialog";
 
 function useDebounce<T>(value: T, ms: number) {
   const [v, setV] = useState(value);
@@ -28,6 +30,7 @@ export default function NewTicketPage() {
   const fromChat = (useLocation().state ?? null) as { title?: string; description?: string } | null;
   const [title, setTitle] = useState(fromChat?.title?.slice(0, 200) ?? "");
   const [description, setDescription] = useState(fromChat?.description ?? "");
+  const [mentions, setMentions] = useState<string[]>([]);
   const [category, setCategory] = useState("Diğer");
   const [priority, setPriority] = useState("Medium");
   const [error, setError] = useState("");
@@ -102,7 +105,7 @@ export default function NewTicketPage() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const t = (await api.post<{ id: string }>("/api/tickets", { title, description, category, priority })).data;
+      const t = (await api.post<{ id: string }>("/api/tickets", { title, description, category, priority, mentionedUserIds: mentions })).data;
       // Seçilen dosyaları ticket'a yükle. Ticket açıldıktan sonra bir dosya yüklenemezse ticket'ı yine de aç
       // (aksi halde kullanıcı tekrar "Ticket aç"a basıp aynı ticket'tan iki tane oluşturur); ekler ticket penceresinden yeniden eklenebilir.
       let failed = 0;
@@ -229,14 +232,16 @@ export default function NewTicketPage() {
               <Alert severity="info">Son 24 saatte {match.data!.similarOpen} kişi benzer bir sorun bildirdi. Ekip bilgilendirildi.</Alert>
             )}
             <TextField label="Sorununuzu kısaca yazın" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
-            <TextField label="Açıklama" value={description} onChange={(e) => setDescription(e.target.value)} multiline minRows={4} />
-            <Stack direction="row" spacing={2}>
+            <MentionField label="Açıklama" value={description} onChange={setDescription} onMentions={setMentions} multiline minRows={4}
+              helperText="Birini eklemek için @ yazıp adını yazmaya başlayın; o kişi talebi takip eder ve bildirim alır." />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { sm: "center" } }}>
               <TextField select label="Kategori" value={category} onChange={(e) => setCategory(e.target.value)} sx={{ flex: 1 }}>
                 {CATEGORIES.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
               </TextField>
               <TextField select label="Öncelik" value={priority} onChange={(e) => setPriority(e.target.value)} sx={{ flex: 1 }}>
                 {Object.entries(PRIORITIES).map(([k, v]) => <MenuItem key={k} value={k}>{v}</MenuItem>)}
               </TextField>
+              <ExpertsButton area={category} title={title} description={description} />
             </Stack>
             <Box>
               <Button component="label" size="small" startIcon={<AttachIcon />}>

@@ -15,6 +15,7 @@ import TicketConversation from "./TicketConversation";
 import { CsatStars, SlaPanel } from "./SlaCsat";
 import { Person } from "./common";
 import { MergeButton, Watchers } from "./TicketExtras";
+import { ExpertsButton } from "./ExpertsDialog";
 
 // Ticket detayı: açıklama, ekler, (yönetici için) göreve çevirme
 export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | null; onClose: () => void }) {
@@ -39,6 +40,7 @@ export default function TicketDialog({ ticket, onClose }: { ticket: Ticket | nul
           {ticket.incidentId && (
             <Chip size="small" color="error" label="Büyük olaya bağlı" onClick={isManager ? () => { onClose(); nav("/incidents"); } : undefined} />
           )}
+          {isManager && <ExpertsButton area={ticket.category} title={ticket.title} description={ticket.description} />}
           {workKey && (
             <Chip size="small" color="primary" label={`Görev: ${workKey}`}
               onClick={() => { onClose(); nav(`/projects/${workKey.split("-")[0]}?item=${workKey}`); }} />

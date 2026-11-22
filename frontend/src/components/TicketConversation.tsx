@@ -2,7 +2,7 @@ import { CannedMenu } from "./TicketExtras";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Alert, Avatar, Box, Button, Chip, CircularProgress, FormControlLabel, Stack, Switch, TextField, Tooltip, Typography,
+  Alert, Avatar, Box, Button, Chip, CircularProgress, FormControlLabel, Stack, Switch, Tooltip, Typography,
 } from "@mui/material";
 import AutoIcon from "@mui/icons-material/AutoAwesome";
 import SendIcon from "@mui/icons-material/SendRounded";
@@ -11,6 +11,7 @@ import SystemIcon from "@mui/icons-material/SettingsSuggestOutlined";
 import { api, errorMessage, timeAgo, type Ticket } from "../api";
 import { initials } from "./Layout";
 import { avatarColor } from "../theme";
+import MentionField, { HighlightMentions } from "./MentionField";
 
 interface Msg { id: string; body: string; internal: boolean; aiAssisted: boolean; createdAt: string; authorId: string; authorName?: string; fromSupport: boolean; system?: boolean }
 interface DraftSource { type: "article" | "ticket"; id: string; title: string; resolution?: string; rating?: number | null }
@@ -19,6 +20,7 @@ interface DraftSource { type: "article" | "ticket"; id: string; title: string; r
 export default function TicketConversation({ ticket, isSupport }: { ticket: Ticket; isSupport: boolean }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
+  const [mentions, setMentions] = useState<string[]>([]);
   const [internal, setInternal] = useState(false);
   const [draft, setDraft] = useState<{ text: string; ai: boolean; sources: DraftSource[] } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -36,7 +38,7 @@ export default function TicketConversation({ ticket, isSupport }: { ticket: Tick
     onSuccess: (d) => { setText(d.draft); setInternal(false); setDraft({ text: d.draft, ai: d.aiGenerated, sources: d.sources }); },
   });
   const send = useMutation({
-    mutationFn: async (waitForReply: boolean = false) => api.post(`/api/tickets/${ticket.id}/messages`, { body: text, internal, aiAssisted: !!draft, waitForReply }),
+    mutationFn: async (waitForReply: boolean = false) => api.post(`/api/tickets/${ticket.id}/messages`, { body: text, internal, aiAssisted: !!draft, waitForReply, mentionedUserIds: mentions }),
     onSuccess: () => {
       setText(""); setDraft(null); setInternal(false);
       qc.invalidateQueries({ queryKey: ["ticketMessages", ticket.id] });
@@ -77,7 +79,7 @@ export default function TicketConversation({ ticket, isSupport }: { ticket: Tick
                   <Typography variant="caption">· {timeAgo(m.createdAt)}{m.internal ? " · iç not" : ""}</Typography>
                   {m.aiAssisted && isSupport && <Tooltip title="Yapay zekâ taslağından düzenlenerek yazıldı"><AutoIcon sx={{ fontSize: 13 }} /></Tooltip>}
                 </Stack>
-                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{m.body}</Typography>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}><HighlightMentions text={m.body} /></Typography>
               </Box>
             </Stack>
           );
@@ -102,8 +104,8 @@ export default function TicketConversation({ ticket, isSupport }: { ticket: Tick
       )}
       {(makeDraft.error || send.error) && <Alert severity="error" sx={{ mb: 1 }}>{errorMessage(makeDraft.error ?? send.error)}</Alert>}
 
-      <TextField fullWidth multiline minRows={2} maxRows={10} value={text} onChange={(e) => setText(e.target.value)}
-        placeholder={internal ? "Ekip içi not (çalışan görmez)…" : isSupport ? "Çalışana cevap yazın…" : "Destek ekibine yazın…"}
+      <MentionField multiline minRows={2} maxRows={10} value={text} onChange={setText} onMentions={setMentions}
+        placeholder={internal ? "Ekip içi not (çalışan görmez)… @ ile ekip arkadaşınızı anın" : isSupport ? "Çalışana cevap yazın… (@ ile birini ekleyin)" : "Destek ekibine yazın… (@ ile birini ekleyin)"}
         sx={internal ? { "& .MuiOutlinedInput-root": { bgcolor: "action.hover" } } : undefined}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && text.trim()) send.mutate(false); }} />
       <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
