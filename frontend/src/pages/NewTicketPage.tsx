@@ -103,14 +103,20 @@ export default function NewTicketPage() {
   const create = useMutation({
     mutationFn: async () => {
       const t = (await api.post<{ id: string }>("/api/tickets", { title, description, category, priority })).data;
-      // Seçilen dosyaları ticket'a yükle
+      // Seçilen dosyaları ticket'a yükle. Ticket açıldıktan sonra bir dosya yüklenemezse ticket'ı yine de aç
+      // (aksi halde kullanıcı tekrar "Ticket aç"a basıp aynı ticket'tan iki tane oluşturur); ekler ticket penceresinden yeniden eklenebilir.
+      let failed = 0;
       for (const f of files) {
         const form = new FormData();
         form.append("file", f);
-        await api.post(`/api/tickets/${t.id}/attachments`, form);
+        try { await api.post(`/api/tickets/${t.id}/attachments`, form, { timeout: 600000 }); } catch { failed++; }
       }
+      return { id: t.id, failed };
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["myTickets"] }); nav("/tickets"); },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["myTickets"] });
+      nav(r.failed ? `/tickets?open=${r.id}` : "/tickets");
+    },
     onError: (e) => setError(errorMessage(e)),
   });
 
@@ -235,7 +241,7 @@ export default function NewTicketPage() {
             <Box>
               <Button component="label" size="small" startIcon={<AttachIcon />}>
                 Dosya ekle (ekran görüntüsü, log…)
-                <input hidden type="file" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.log,.csv,.docx,.xlsx,.pptx,.zip"
+                <input hidden type="file" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.log,.csv,.docx,.xlsx,.pptx,.zip,.mp4,.webm"
                   onChange={(e) => { setFiles([...files, ...Array.from(e.target.files ?? [])]); e.target.value = ""; }} />
               </Button>
               <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
